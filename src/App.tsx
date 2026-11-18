@@ -38,9 +38,9 @@ export function App() {
   return (
     <main>
       <h1>CityParquet downloader</h1>
-      {status.state === "starting" && <p>Starting DuckDB…</p>}
+      {status.state === "starting" && <p role="status">Starting DuckDB…</p>}
       {status.state === "ready" && (
-        <p>
+        <p role="status">
           DuckDB {status.duckdb} is ready, with {status.extensions.join(", ")}.
         </p>
       )}
