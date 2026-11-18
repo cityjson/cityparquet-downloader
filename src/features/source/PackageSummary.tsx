@@ -1,5 +1,4 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -17,6 +16,7 @@ const LISTED_BY = {
   url: "a single file",
 } as const;
 
+/** The open package, compact enough for the side panel; it folds away. */
 export function PackageSummary() {
   const pkg = usePackage();
   switch (pkg.state) {
@@ -28,57 +28,66 @@ export function PackageSummary() {
       return (
         <Alert variant="destructive" role="alert">
           <AlertTitle>Could not open the package</AlertTitle>
-          <AlertDescription>
+          <AlertDescription className="break-all">
             {pkg.url}: {pkg.message}
           </AlertDescription>
         </Alert>
       );
     case "ready": {
       const { info } = pkg;
+      const crs = [...new Set(info.tables.map((t) => formatCrs(t.crs)))];
       return (
-        <Card className="gap-4 py-4">
-          <CardHeader className="px-4">
-            <CardTitle>
-              <h2>Package</h2>
-            </CardTitle>
-            <CardDescription>
-              <a href={pkg.url}>{pkg.url}</a>, {LISTED_BY[info.source.listedBy]}. Extent (WGS 84,
-              lon/lat): <span data-testid="package-extent">{formatExtent(info.extentWgs84)}</span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-4">
-            <Table aria-label="Tables">
+        <details open className="group flex flex-col gap-2">
+          <summary className="cursor-pointer list-inside marker:text-muted-foreground">
+            <h2 className="inline">Package</h2>
+          </summary>
+          <div className="mt-2 flex flex-col gap-2 text-xs">
+            <p className="break-all">
+              <a href={pkg.url}>{pkg.url}</a>, {LISTED_BY[info.source.listedBy]}.
+            </p>
+            <p>
+              Extent (WGS 84, lon/lat):{" "}
+              <span data-testid="package-extent" className="tabular-nums">
+                {formatExtent(info.extentWgs84)}
+              </span>
+            </p>
+            <p>CRS: {crs.join("; ")}</p>
+            <Table aria-label="Tables" className="text-xs">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Table</TableHead>
-                  <TableHead className="text-right">Rows</TableHead>
-                  <TableHead>CRS</TableHead>
-                  <TableHead>LoDs</TableHead>
-                  <TableHead className="text-right">Attributes</TableHead>
-                  <TableHead className="text-right">Row groups</TableHead>
-                  <TableHead>Extent (WGS 84)</TableHead>
+                  <TableHead className="h-7 px-1">Table</TableHead>
+                  <TableHead className="h-7 px-1 text-right">Rows</TableHead>
+                  <TableHead className="h-7 px-1 text-right" title="Row groups">
+                    Groups
+                  </TableHead>
+                  <TableHead className="h-7 px-1">LoDs</TableHead>
+                  <TableHead className="h-7 px-1 text-right" title="Attributes">
+                    Attrs
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {info.tables.map((t) => (
                   <TableRow key={t.name}>
-                    <TableCell className="font-medium text-foreground">{t.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="px-1 font-medium text-foreground">{t.name}</TableCell>
+                    <TableCell className="px-1 text-right tabular-nums">
                       {formatCount(t.rowCount)}
                     </TableCell>
-                    <TableCell>{formatCrs(t.crs)}</TableCell>
-                    <TableCell>{t.lods.join(", ") || "none"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{t.attributes.length}</TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="px-1 text-right tabular-nums">
                       {formatCount(t.rowGroups.length)}
                     </TableCell>
-                    <TableCell className="tabular-nums">{formatExtent(t.extentWgs84)}</TableCell>
+                    <TableCell className="px-1 whitespace-normal">
+                      {t.lods.join(", ") || "none"}
+                    </TableCell>
+                    <TableCell className="px-1 text-right tabular-nums">
+                      {t.attributes.length}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
       );
     }
   }

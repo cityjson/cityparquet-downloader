@@ -29,9 +29,10 @@ export interface Chunk {
 /**
  * The views on which footprints are read and drawn: those touching at most this many row
  * groups, since each is a read of its own. On 3DBAG (row groups of 65,536 rows, about 9 by
- * 12 km) a view of Delft at zoom 14 touches 4. Measured in docs/findings.md.
+ * 12 km) a 1120 by 757 pixel view of Delft touches 4 at zoom 13.7 and 7 at 12.7; each read
+ * takes 3 to 5 s. Measured in docs/findings.md.
  */
-export const FOOTPRINT_ROW_GROUP_LIMIT = 6;
+export const FOOTPRINT_ROW_GROUP_LIMIT = 4;
 
 /**
  * Or those touching at most this many rows, however many row groups hold them: a package

@@ -3,4 +3,6 @@
 interface ImportMetaEnv {
   /** The CityParquet package the app opens: a directory, a .parquet file or a wildcard. */
   readonly VITE_CITYPARQUET_URL?: string;
+  /** A CARTO Basemaps API key. With one the basemap is CARTO's raster tiles. */
+  readonly VITE_CARTO_KEY?: string;
 }
