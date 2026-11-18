@@ -4,5 +4,47 @@
   "files": { "includes": ["**", "!fixtures", "!pnpm-lock.yaml", "!**/*.md"] },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "css": { "parser": { "tailwindDirectives": true } },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["src/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": "src/core is pure TypeScript: no React.",
+                  "react-dom": "src/core is pure TypeScript: no React.",
+                  "zustand": "src/core is pure TypeScript: no state store.",
+                  "@duckdb/duckdb-wasm": "src/core sends SQL through Engine; DuckDB lives in src/engine."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/engine*", "@/features*", "@/components*", "@/lib*", "../*"],
+                    "message": "src/core imports only from itself and @cityjson/cjconv-core."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "window": "src/core runs without a browser.",
+                  "document": "src/core runs without a browser.",
+                  "location": "src/core runs without a browser; take a base URL.",
+                  "navigator": "src/core runs without a browser.",
+                  "fetch": "src/core takes a Fetch argument instead.",
+                  "Worker": "src/core runs without a browser.",
+                  "localStorage": "src/core runs without a browser."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
