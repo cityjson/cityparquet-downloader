@@ -8,7 +8,7 @@ the loaded extensions, or an error that says why it did not start.
 
 - `startup-progress` shows that DuckDB is starting.
 - `startup-ready` reports the DuckDB version and the loaded extensions.
-- `startup-extensions` includes `cityjson`, `three_d` and `parquet` among them.
+- `startup-extensions` includes `cityjson`, `three_d`, `parquet` and `spatial` among them, and not `httpfs`.
 - `startup-reload` reaches the ready state again after a reload.
 
 ## How to get to it (user POV)
@@ -24,7 +24,7 @@ Preconditions:
 
 - **Open.** Load the page. Run `control browser goto`. The heading `CityParquet downloader` is present.
 - **Ready.** Wait for DuckDB. Run `control browser wait --text "is ready" --timeout 90000`. It prints `visible`.
-- **Version and extensions.** Read the status line. Run `control browser text --role status`. It reads `DuckDB v2.… is ready, with …` and the list contains `cityjson`, `three_d` and `parquet`.
+- **Version and extensions.** Read the status line. Run `control browser text --role status`. It reads `DuckDB v2.… is ready, with …` and the list contains `cityjson`, `three_d`, `parquet` and `spatial`, and not `httpfs`.
 - **Proof.** Run `control browser snapshot --path startup/ready.aria.txt` and `control browser screenshot --path startup/ready.png`. Both show the heading and the status line.
 - **Reload.** Run `control browser goto` again, then the Ready step. The same status line returns.
 
@@ -34,4 +34,5 @@ Preconditions:
 - `Starting DuckDB…` can be gone before a command sees it. Its absence in a snapshot is not a failure of `startup-progress`; prove that one with a snapshot taken right after `goto`.
 - The status line has role `status` but no accessible name. `--role status --name "…"` never matches; use `--text`.
 - With the network blocked the page shows `DuckDB did not start: …` with role `alert`. That is the app working as designed, and the startup feature failing.
-- The extension list also holds DuckDB's built-in ones (`core_functions` and others). Check for the three named above, not for an exact list.
+- The extension list also holds DuckDB's built-in ones (`core_functions` and others). Check for the four named above, not for an exact list.
+- While the package opens a second role `status` element reads `Opening …`. `text --role status` prints the first, which is the DuckDB line.

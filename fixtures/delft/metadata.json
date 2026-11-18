@@ -1,0 +1,63 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json"
+  ],
+  "id": "delft-fixture",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          4.3585251,
+          52.0079178
+        ],
+        [
+          4.3657357,
+          52.0079178
+        ],
+        [
+          4.3657357,
+          52.0118876
+        ],
+        [
+          4.3585251,
+          52.0118876
+        ],
+        [
+          4.3585251,
+          52.0079178
+        ]
+      ]
+    ]
+  },
+  "bbox": [
+    4.3585251,
+    52.0079178,
+    4.3657357,
+    52.0118876
+  ],
+  "properties": {
+    "datetime": "2026-10-05T00:00:00Z",
+    "title": "delft test fixture, cut from https://cityparquet.open3d.city/data/3dbag/"
+  },
+  "links": [
+    {
+      "rel": "derived_from",
+      "href": "https://cityparquet.open3d.city/data/3dbag/"
+    }
+  ],
+  "assets": {
+    "building.parquet": {
+      "href": "./building.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": [
+        "data",
+        "cityparquet-objects"
+      ],
+      "file:size": 1287131,
+      "file:checksum": "12208b9f2102170b3f3824d51abc80883ca609bb7536a25b7c3440f2d9b78d89715b"
+    }
+  }
+}
