@@ -41,7 +41,16 @@ export async function createEngine(): Promise<BrowserEngine> {
   const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
   try {
     await db.instantiate(baseWasm);
-    await db.open({});
+    // Range reads only, all three flags explicit. This build's defaults force whole-file
+    // HTTP reads (a plain HEAD, then a GET with no Range), which for a national package
+    // (14 GB) exhausts the tab's memory. A server without range support is an error.
+    await db.open({
+      filesystem: {
+        forceFullHTTPReads: false,
+        reliableHeadRequests: true,
+        allowFullHTTPReads: false,
+      },
+    });
     const conn = await db.connect();
     for (const name of CORE_EXTENSIONS) {
       await conn.query(`INSTALL ${name}`);

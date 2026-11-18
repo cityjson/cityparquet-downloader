@@ -1,7 +1,7 @@
 // The package the app has open: resolved from VITE_CITYPARQUET_URL, footers only.
 import { create } from "zustand";
 import { DEFAULT_SOURCE, openPackage, type PackageInfo, parseSource, resolveSource } from "@/core";
-import { withEngine } from "@/engine/session";
+import { getEngine, withEngine } from "@/engine/session";
 
 export type PackageState =
   | { state: "idle" }
@@ -18,6 +18,8 @@ export const usePackage = create<PackageState>(() => ({ state: "idle" }));
 export async function openSourcePackage(text: string = SOURCE_URL): Promise<void> {
   if (usePackage.getState().state !== "idle" && usePackage.getState().state !== "failed") return;
   usePackage.setState({ state: "opening", url: text }, true);
+  // DuckDB takes seconds to start; start it while the source is resolved.
+  getEngine().catch(() => undefined);
   try {
     const spec = parseSource(text, window.location.href);
     const source = await resolveSource(spec, (url, init) => window.fetch(url, init));
