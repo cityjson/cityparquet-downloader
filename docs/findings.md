@@ -99,16 +99,102 @@ scalar). On `fixtures/delft/` in Chromium, one run:
 | Tile z16 | 25 ms | 121 features, 9,468 bytes |
 | Tile z17 | 20 ms | 76 features, 6,176 bytes |
 
-Each tile is
-`ST_AsMVT({id, object_type, geom: ST_AsMVTGeom(g, ST_Extent(ST_TileEnvelope(z, x, y)))}, 'building')`
-over the rows that `ST_Intersects` the tile envelope. `tests/browser/map.test.ts`
-keeps this working.
+The app's tile (`tileSql`) is `ST_AsMVT` over `ST_AsMVTGeom(geom, envelope, 4096, 64)`,
+with the rows chosen by their stored bounding box padded by the 64-unit buffer, in one
+layer `features`. Over zero rows `ST_AsMVT` returns a small blob (a layer with no
+features), not NULL. `tests/browser/map.test.ts` keeps this working.
+
+## The map on 3DBAG
+
+Measured with the verification skill, whose recorder logs every request the page and its
+workers make, in headless Chromium (WebGL 2 through SwiftShader) in a 1440 by 900 window,
+so the map is 1120 by 757 pixels.
+
+### Zooming into Delft
+
+From the fitted view (zoom 6.7), double-clicks at 4.357, 52.011 take the status through
+329, 274, 138, 60, 28, 15 and 7 row groups in view, then to footprints at zoom 13.7, where
+the view touches row groups 69, 70, 71 and 96: 131,009 features.
+
+| | One run |
+| --- | --- |
+| Requests to the host | 12 range GETs, 21.06 MB |
+| Per row group | 230 kB from `id` on, then 1 MB and 4 MB from the start of `geometry_lod0_0` |
+| Chunk loads (read, transform to EPSG:3857, insert) | 3.7, 3.4, 2.7 and 4.5 s, one after another |
+| First footprints | 4 to 5 s after the status switches |
+| All footprints | 15.6 s after it (13.7 s in another run) |
+| Zoom-13 tiles | 0.7 to 1.8 MB each, cut in 0.7 to 1.25 s, waiting up to 4.8 s behind a load |
+| Tiles at 14, 15 and 16 (remote test) | 430 ms (550 kB), 209 ms, 60 to 73 ms |
+| Local table | 42 MB for 131,009 rows, 17 MB of it geometry |
+| Renderer process | 870 to 940 MB resident |
+| Zooming out and back | no request, the same count at once (the cache) |
+
+The loads run one after another: duckdb-wasm reads over HTTP with synchronous requests from
+its one worker, so a second request never starts before the first ends. A tile waits for
+the load that is running, even though tiles go before loads in the engine's queue.
+
+Re-cutting the tiles in view after every load took the four loads to 21 s, since each
+refresh costs about what a load does. The tiles are refreshed when the first row group in
+view is ready and when the last is.
+
+### Choosing rows by `file_row_number`
+
+A row group is read with `read_parquet(…, file_row_number := true)` and
+`WHERE file_row_number >= start AND file_row_number < start + rows`, which DuckDB prunes to
+that row group alone. A predicate on `bbox` built from the row group's own statistics
+matches its neighbours too: in native DuckDB it read 25 MB and 94,473 rows for row group
+70, against 2.64 MB by row number.
+
+`WHERE id = '…'` is worse still. In wasm DuckDB reads the `id` column of every row group to
+find one row: 170 GETs, 37.8 MB, 77 s. The popup reads its row by row number, 4 GETs,
+15.2 MB, 4.0 s, and checks the id it gets back.
+
+### Read-ahead
+
+duckdb-wasm reads a remote file through a buffer that doubles, 16 kB to 4 MB. A row group's
+`geometry_lod0_0` is about 2 MB, so the second of its reads runs about 3 MB into
+`geometry_lod1_2`: 5.3 MB on the wire for 2.3 MB of footprint columns. A popup's last read
+(8.4 MB for row 4625167) runs 6.9 MB into the next row group, and fetches the geometry
+bytes that lie between the attribute columns. Every read still starts inside the row
+group it is for, and nothing near the whole file is fetched.
+
+`SET disable_parquet_prefetching = true` makes it worse: 49 GETs, 24.2 MB and 33 s for
+the Delft zoom. `prefetch_all_parquet_files` changes nothing. Both are left at their
+defaults.
+
+### Basemap
+
+`basemaps.cartocdn.com` answers every request without an API key with a tile reading
+"API key required"; `tile.openstreetmap.org` answers 403 from here. The default basemap is
+therefore OpenFreeMap's `positron` and `dark` vector styles (no key; the two share sprite
+and glyphs, so a theme switch is a style diff). With `VITE_CARTO_KEY` set at build time,
+the basemap is CARTO's `light_all` and `dark_all` rasters with the key; that path has not
+been seen working, for want of a key.
+
+### MapLibre in this app
+
+- MapLibre's stylesheet gives `.maplibregl-map` `position: relative`, which beats
+  Tailwind's `absolute inset-0` on the same element: the container stays 0 pixels high.
+  It is `h-full w-full` inside a positioned parent.
+- Vite does not rewrite the worker's URL inside MapLibre; `setWorkerUrl` takes it from a
+  `?url` import.
+- MapLibre gives its canvas the role `region` named `Map`. A label on the container too
+  would make two.
+- Headless Chromium has WebGL 2 only through SwiftShader, with
+  `--enable-unsafe-swiftshader`.
+- `setStyle(style, { diff: true, transformStyle })` swaps the basemap and keeps the
+  package's sources, their data and their layers.
+- A double-click delivers two `click` events before `dblclick`. The popup waits 250 ms
+  for a second click, so a zoom reads no attributes.
+- Chuo-ku's one `Bridge` object has a bounding box spanning almost the whole package.
+  Bbox rectangles are filled at a quarter of a footprint's opacity, and a click means a
+  footprint before a rectangle and the smaller of two rectangles.
 
 ## Other facts later phases need
 
 - `Engine.query` returns plain JSON. A BLOB (an MVT tile, a WKB geometry) comes back as an
-  object with numeric keys, not a `Uint8Array`. Tiles need a binary path from the Arrow
-  result, or `octet_length` when only the size matters.
+  object with numeric keys, not a `Uint8Array`. `BrowserEngine.queryBytes` takes the first
+  value of the Arrow result as bytes; use `octet_length` when only the size matters.
 - In 3DBAG only `Building` rows carry `geometry_lod0_0`; `BuildingPart` rows do not.
   Chuo-ku's `bridge` table has no LoD0 column at all, so it falls back to `bbox`.
 - `copyFileToBuffer` (`readFile`) on a path that does not exist returns one byte instead

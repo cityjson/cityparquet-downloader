@@ -34,9 +34,12 @@ test-browser && just build` before calling work done.
 ## Structure
 
 ```
-src/core/       pure TypeScript: source, footer, crs, plan, package. Unit tested
+src/core/       pure TypeScript: source, footer, crs, plan, package; chunk, cache, tile,
+                features (map SQL), colour. Unit tested
 src/engine/     duckdb-wasm: boot, extensions, file I/O; session.ts is the app's one engine
-src/features/   React features (source today)
+                and its priority queue (`withEngine`)
+src/features/   React features: source (opening a package), map (map, footprints, legend,
+                popup)
 src/components/ shadcn/ui
 tests/unit      src/core          tests/browser   SQL against real duckdb-wasm
 fixtures/       small packages cut by scripts/make-fixture.py; never edit by hand
@@ -56,6 +59,10 @@ fixtures/       small packages cut by scripts/make-fixture.py; never edit by han
   table; the national file is 14.4 GB.
 - `ST_Transform` always passes `always_xy := true`.
 - Values reach SQL only through `src/core/sql.ts` (`lit`, `ident`, `num`, `sql`).
+- Read a remote row group, or one row, by `file_row_number`, never by `id` or a `bbox`
+  predicate: in wasm `id = …` reads the `id` column of every row group (findings.md).
+- Every engine call from the app goes through `withEngine`; long reads are `background`,
+  so tiles and clicks are not stuck behind them.
 - Write tests first for `src/core`. Keep only tests that prove something a user or a
   later phase relies on. Remote-host tests go in `tests/browser/remote/`.
 
