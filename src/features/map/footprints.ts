@@ -181,7 +181,10 @@ function update() {
     abort.abort();
     queued.delete(key);
   }
-  if (dropped.length > 0) setCache((next) => dropped.forEach(([key]) => next.delete(key)));
+  if (dropped.length > 0)
+    setCache((next) => {
+      for (const [key] of dropped) next.delete(key);
+    });
   if (kind !== "footprints") return;
 
   const now = Date.now();

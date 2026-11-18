@@ -71,7 +71,7 @@ if (import.meta.env.DEV) {
 const hasPainter = (map: MapLibreMap) => (map as unknown as { painter?: unknown }).painter != null;
 
 export function MapView() {
-  const container = useRef<HTMLElement | null>(null);
+  const container = useRef<HTMLDivElement | null>(null);
   const [map, setLoaded] = useState<MapLibreMap | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -251,7 +251,7 @@ export function MapView() {
 
   return (
     <div className="relative h-full w-full">
-      <section ref={container} aria-label="Map" className="h-full w-full" />
+      <div ref={container} className="h-full w-full" />
       {failed && (
         <div className="absolute inset-0 flex items-center justify-center p-8">
           <Alert variant="destructive" role="alert" className="max-w-md">

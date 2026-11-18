@@ -3,7 +3,8 @@
 // Chromium per run, both started here and only ever stopped by pid.
 //
 //   control.mjs launch [--source <package URL>] | doctor | cleanup
-//   control.mjs browser <goto|click|fill|press|wait|text|snapshot|screenshot|eval> [--flags]
+//   control.mjs browser <goto|click|hover|fill|press|wait|text|snapshot|screenshot|eval> [--flags]
+//   control.mjs network <mark|summary> [--host <name>]
 //
 // Every command takes --run <name> (default "default"); runs with different names can
 // be alive at the same time.
@@ -29,6 +30,8 @@ const run = flags.run ?? "default";
 const runDir = path.join(repo, ".verify", "runs", run);
 const evidenceDir = path.join(repo, ".verify", "evidence", run);
 const stateFile = path.join(runDir, "state.json");
+const networkFile = path.join(runDir, "network.jsonl");
+const markFile = path.join(runDir, "network.mark");
 const TITLE = "CityParquet downloader";
 // The package a launch opens unless --source names another: the fixture the dev server
 // serves, so verification needs neither the 14 GB national file nor its host.
@@ -74,7 +77,10 @@ const fail = (message) => {
 
 async function launch() {
   const existing = readState();
-  if (existing && (alive(existing.vitePid) || alive(existing.chromePid))) {
+  if (
+    existing &&
+    [existing.vitePid, existing.chromePid, existing.recorderPid].some((p) => p && alive(p))
+  ) {
     fail(`run "${run}" is already up at ${existing.url}. Use it, or run cleanup first.`);
   }
   fs.mkdirSync(runDir, { recursive: true });
@@ -113,6 +119,9 @@ async function launch() {
       `--remote-debugging-port=${cdpPort}`,
       `--user-data-dir=${path.join(runDir, "profile")}`,
       "--window-size=1440,900",
+      // No GPU here: WebGL 2 for the map comes from SwiftShader, which Chromium only
+      // uses without a warning when asked to.
+      "--enable-unsafe-swiftshader",
       "about:blank",
     ],
     { detached: true, stdio: ["ignore", chromeLog, chromeLog] },
@@ -134,6 +143,23 @@ async function launch() {
 
   await until("the dev server", async () => (await fetch(url)).ok);
   await until("Chromium", async () => (await fetch(`http://127.0.0.1:${cdpPort}/json/version`)).ok);
+
+  // A third process records every request the page makes, workers included, so that
+  // `network` can say what a step fetched.
+  const recorderLog = fs.openSync(path.join(runDir, "recorder.log"), "w");
+  const recorder = spawn(
+    process.execPath,
+    [fileURLToPath(import.meta.url), "record", "--run", run],
+    {
+      cwd: repo,
+      detached: true,
+      stdio: ["ignore", recorderLog, recorderLog],
+    },
+  );
+  recorder.unref();
+  state.recorderPid = recorder.pid;
+  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+  await until("the network recorder", () => fs.existsSync(networkFile), 30_000);
   console.log(JSON.stringify(state, null, 2));
   console.log(`ready: ${url} (evidence goes to ${path.relative(repo, evidenceDir)}/)`);
 }
@@ -145,6 +171,11 @@ async function doctor() {
   const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
   check("dev server process started by this run", alive(state.vitePid), `pid ${state.vitePid}`);
   check("Chromium process started by this run", alive(state.chromePid), `pid ${state.chromePid}`);
+  check(
+    "network recorder started by this run",
+    alive(state.recorderPid),
+    `pid ${state.recorderPid}`,
+  );
   let html = "";
   try {
     html = await (await fetch(state.url)).text();
@@ -173,7 +204,8 @@ async function doctor() {
 async function cleanup() {
   const state = readState();
   if (!state) return console.log(`nothing to clean for run "${run}"`);
-  for (const pid of [state.vitePid, state.chromePid]) {
+  const pids = [state.vitePid, state.chromePid, state.recorderPid].filter(Boolean);
+  for (const pid of pids) {
     // Each was spawned detached, so -pid is the group this run created and nothing else.
     try {
       process.kill(-pid, "SIGTERM");
@@ -181,12 +213,8 @@ async function cleanup() {
       // already gone
     }
   }
-  await until(
-    "processes to exit",
-    () => !alive(state.vitePid) && !alive(state.chromePid),
-    10_000,
-  ).catch(() => {
-    for (const pid of [state.vitePid, state.chromePid]) {
+  await until("processes to exit", () => pids.every((pid) => !alive(pid)), 10_000).catch(() => {
+    for (const pid of pids) {
       try {
         process.kill(-pid, "SIGKILL");
       } catch {
@@ -229,7 +257,22 @@ async function browser() {
         console.log(page.url());
         break;
       case "click":
-        await target().click({ timeout });
+        // --x and --y click a point of the page, such as a feature on the map's canvas.
+        // --count 2 double-clicks, which zooms the map in one level around the point.
+        if (flags.x !== undefined)
+          await page.mouse.click(Number(flags.x), Number(flags.y), {
+            clickCount: Number(flags.count ?? 1),
+          });
+        else await target().click({ timeout, clickCount: Number(flags.count ?? 1) });
+        break;
+      case "hover":
+        if (flags.x !== undefined) await page.mouse.move(Number(flags.x), Number(flags.y));
+        else await target().hover({ timeout });
+        break;
+      case "wheel":
+        // Scrolls at a point: negative --dy zooms the map in there, positive out.
+        await page.mouse.move(Number(flags.x), Number(flags.y));
+        await page.mouse.wheel(0, Number(flags.dy ?? -100));
         break;
       case "fill":
         await target().fill(flags.value ?? "", { timeout });
@@ -263,6 +306,39 @@ async function browser() {
       case "eval":
         console.log(JSON.stringify(await page.evaluate(flags.js), null, 2));
         break;
+      // Reads the map through window.__map (dev builds only): `map-view` prints the camera,
+      // `map-at --lon --lat` the page pixel of a point, for `click` and `wheel`.
+      case "map-view":
+        console.log(
+          JSON.stringify(
+            await page.evaluate(() => {
+              const m = window.__map;
+              if (!m) return null;
+              const b = m.getBounds();
+              return {
+                zoom: Math.round(m.getZoom() * 100) / 100,
+                center: m.getCenter().toArray(),
+                bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+              };
+            }),
+          ),
+        );
+        break;
+      case "map-at":
+        console.log(
+          (
+            await page.evaluate(
+              ([lon, lat]) => {
+                const m = window.__map;
+                const r = m.getContainer().getBoundingClientRect();
+                const p = m.project([lon, lat]);
+                return [Math.round(r.left + p.x), Math.round(r.top + p.y)];
+              },
+              [Number(flags.lon), Number(flags.lat)],
+            )
+          ).join(" "),
+        );
+        break;
       default:
         fail(`unknown browser action "${action}"`);
     }
@@ -271,6 +347,61 @@ async function browser() {
   }
 }
 
-const commands = { launch, doctor, cleanup, browser };
-if (!commands[command]) fail("usage: control.mjs <launch|doctor|browser|cleanup> [--run name]");
+async function record() {
+  const state = readState();
+  if (!state) fail(`no run "${run}"`);
+  const connection = await chromium.connectOverCDP(`http://127.0.0.1:${state.cdpPort}`);
+  const context = connection.contexts()[0];
+  const out = fs.openSync(networkFile, "a");
+  context.on("requestfinished", async (request) => {
+    const sizes = await request.sizes().catch(() => null);
+    const response = await request.response().catch(() => null);
+    const line = {
+      at: Date.now(),
+      method: request.method(),
+      url: request.url(),
+      range: request.headers().range ?? null,
+      status: response?.status() ?? null,
+      bytes: sizes?.responseBodySize ?? 0,
+    };
+    fs.writeSync(out, `${JSON.stringify(line)}\n`);
+  });
+  // Stays connected until cleanup stops it.
+  await new Promise(() => undefined);
+}
+
+async function network() {
+  const state = readState();
+  if (!state) fail(`no run "${run}". Start one with: control.mjs launch`);
+  const [action = "summary"] = positional;
+  if (action === "mark") {
+    fs.writeFileSync(markFile, String(Date.now()));
+    return console.log("marked");
+  }
+  if (action !== "summary") fail(`unknown network action "${action}"`);
+  const since = fs.existsSync(markFile) ? Number(fs.readFileSync(markFile, "utf8")) : 0;
+  const lines = fs
+    .readFileSync(networkFile, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l))
+    .filter((l) => l.at >= since && (!flags.host || new URL(l.url).host === flags.host));
+  const byHost = {};
+  for (const l of lines) {
+    const host = new URL(l.url).host;
+    byHost[host] ??= { requests: 0, gets: 0, bytes: 0 };
+    const h = byHost[host];
+    h.requests += 1;
+    if (l.method === "GET") h.gets += 1;
+    h.bytes += l.bytes;
+  }
+  const parquet = lines
+    .filter((l) => l.method === "GET" && /\.parquet($|\?)/.test(l.url))
+    .map((l) => `${new URL(l.url).pathname} ${l.range ?? "(no range)"} ${l.status} ${l.bytes}`);
+  console.log(JSON.stringify({ since: new Date(since).toISOString(), byHost, parquet }, null, 2));
+}
+
+const commands = { launch, doctor, cleanup, browser, record, network };
+if (!commands[command])
+  fail("usage: control.mjs <launch|doctor|browser|network|cleanup> [--run name]");
 commands[command]().catch((error) => fail(error.message));

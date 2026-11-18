@@ -32,7 +32,7 @@ export function MapStatus() {
 
   return (
     <section aria-labelledby="map-status-heading" className="flex flex-col gap-2">
-      <h2 id="map-status-heading">Map</h2>
+      <h2 id="map-status-heading">View</h2>
       <p role="status" data-testid="map-status">
         {regime.kind === "footprints"
           ? `Footprints: ${formatCount(features)} features${loading ? `, loading ${loading} of ${touched.length} row groups` : ""}`
