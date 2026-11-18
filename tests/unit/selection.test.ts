@@ -5,6 +5,7 @@ import type { RowGroup } from "@/core/footer";
 import {
   compileSelection,
   estimateBytes,
+  fromMercator,
   parseExtent,
   type ScopeChunk,
   SELECTION_ROW_LIMIT,
@@ -101,6 +102,9 @@ test("toMercator matches EPSG:3857 at the edges and at Delft", () => {
   const [x, y] = toMercator([4.36, 52.01]);
   expect(x).toBeCloseTo(485352.9798586728, 6);
   expect(y).toBeCloseTo(6801933.784650408, 6);
+  const [lon, lat] = fromMercator([x, y]);
+  expect(lon).toBeCloseTo(4.36, 12);
+  expect(lat).toBeCloseTo(52.01, 12);
 });
 
 describe("compileSelection: the scope", () => {

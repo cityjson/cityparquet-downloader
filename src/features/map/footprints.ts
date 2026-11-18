@@ -75,6 +75,8 @@ interface Placed {
 
 let placed: Placed | null = null;
 let view: Box | null = null;
+/** Chunks a selection looks at: loaded and kept whatever the view, until unpinned. */
+let pinned: readonly Chunk[] = [];
 /** Recent chunk loads, newest last, with the time each took once it ran. */
 export const loadLog: { chunk: ChunkKey; ms: number }[] = [];
 
@@ -141,6 +143,7 @@ export async function placePackage(info: PackageInfo): Promise<void> {
   const [lo, hi] = [Math.min(...shares), Math.max(...shares)];
   for (const f of features)
     f.properties.share = hi > lo ? (f.properties.share - lo) / (hi - lo) : 1;
+  pinned = [];
   placed = {
     chunks,
     ids: new Map(chunks.map((c, i) => [c.key, i])),
@@ -158,6 +161,18 @@ export function setView(box: Box): void {
   update();
 }
 
+/**
+ * Keeps these chunks' footprints loaded, in view or not, as a selection needs them. Each
+ * call replaces the last; an empty list releases them to the cache's usual eviction.
+ */
+export function pinChunks(keys: readonly ChunkKey[]): void {
+  const at = placed;
+  if (!at) return;
+  const wanted = new Set(keys);
+  pinned = at.chunks.filter((c) => wanted.has(c.key));
+  update();
+}
+
 /** Forgets failed loads, so the next view tries them again. */
 export function retryFailed(): void {
   setCache((cache) => {
@@ -171,7 +186,7 @@ function update() {
   const touched = touchedChunks(placed.chunks, view);
   const kind = regimeFor(touched);
   useMapData.setState({ regime: { kind, touched } });
-  const wanted = kind === "footprints" ? touched : [];
+  const wanted = [...new Set([...(kind === "footprints" ? touched : []), ...pinned])];
 
   // Loads still queued for a view the map has left are called off, and their chunks are
   // absent again.
@@ -185,7 +200,7 @@ function update() {
     setCache((next) => {
       for (const [key] of dropped) next.delete(key);
     });
-  if (kind !== "footprints") return;
+  if (wanted.length === 0) return;
 
   const now = Date.now();
   const cache = useMapData.getState().cache;

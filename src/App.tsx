@@ -5,8 +5,11 @@ import { FeaturePopup } from "@/features/map/FeaturePopup";
 import { Legend } from "@/features/map/Legend";
 import { MapStatus } from "@/features/map/MapStatus";
 import { MapView } from "@/features/map/MapView";
+import { AreaTools } from "@/features/selection/AreaTools";
+import { SelectionSummary } from "@/features/selection/SelectionSummary";
 import { PackageSummary } from "@/features/source/PackageSummary";
 import { openSourcePackage } from "@/features/source/store";
+import { TableDrawer } from "@/features/table/TableDrawer";
 import { toggleTheme, useTheme } from "@/lib/theme";
 
 function EngineStatus() {
@@ -35,8 +38,8 @@ function ThemeToggle() {
 }
 
 /**
- * One screen: the map fills the window, the side panel holds what the package is and what
- * the map shows. The map column is a flex column so a drawer can sit below the map.
+ * One screen: the map fills the window, the side panel holds what the package is, what
+ * the map shows and what is selected; the feature table is a drawer below the map.
  */
 export function App() {
   const [panel, setPanel] = useState(true);
@@ -61,6 +64,7 @@ export function App() {
           </header>
           <PackageSummary />
           <MapStatus />
+          <SelectionSummary />
           <Legend />
         </aside>
       )}
@@ -68,6 +72,7 @@ export function App() {
         <div className="relative min-h-0 flex-1">
           <MapView />
           <FeaturePopup />
+          <AreaTools />
           <Button
             size="xs"
             variant="outline"
@@ -79,6 +84,7 @@ export function App() {
             {panel ? "Hide panel" : "Show panel"}
           </Button>
         </div>
+        <TableDrawer />
       </main>
     </div>
   );

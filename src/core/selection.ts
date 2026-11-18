@@ -95,6 +95,13 @@ export function toMercator([lon, lat]: LonLat): [number, number] {
   return [x, y];
 }
 
+/** An EPSG:3857 point in WGS 84. */
+export function fromMercator([x, y]: readonly [number, number]): [number, number] {
+  const lon = (x / WEB_MERCATOR_HALF) * 180;
+  const lat = (Math.atan(Math.exp((y / WEB_MERCATOR_HALF) * Math.PI)) * 360) / Math.PI - 90;
+  return [lon, lat];
+}
+
 /**
  * The area's extent in WGS 84. Its edges are straight in Web Mercator, where longitude and
  * latitude both change monotonically along an edge, so the vertices bound it.
@@ -230,7 +237,8 @@ export interface Page {
 }
 
 /**
- * One page of the selection: `__uid, __file, __row, __xmin … __ymax`, then each `shown`
+ * One page of the selection: `__uid, __file, __row, __id, __type`, the footprint's EPSG:3857
+ * extent `__xmin … __ymax`, then each `shown`
  * column as DuckDB's text for it. Sorted by the column's own type, nulls last, then by
  * `__uid` so pages do not overlap.
  */
@@ -245,7 +253,8 @@ export function selectionPageSql(
   const order = page.sort
     ? `s.${ident(page.sort.column)} ${page.sort.direction === "asc" ? "ASC" : "DESC"} NULLS LAST, s.__uid`
     : "s.__uid";
-  return sql`SELECT s.__uid, s.__file, s.__row, s.__xmin, s.__ymin, s.__xmax, s.__ymax${cells as Sql}
+  return sql`SELECT s.__uid, s.__file, s.__row, s.id AS __id, s.object_type AS __type,
+  s.__xmin, s.__ymin, s.__xmax, s.__ymax${cells as Sql}
 FROM (${scopeSql(chunks, columns)}) s
 WHERE ${plan.where}
 ORDER BY ${order as Sql} LIMIT ${num(page.limit)} OFFSET ${num(page.offset)}`;

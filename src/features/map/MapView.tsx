@@ -15,6 +15,8 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { footprintOf, parseTileUrl, TILE_LAYER, TILE_PROTOCOL, tileSql } from "@/core";
 import { withEngine } from "@/engine/session";
+import { attachDrawing, isDrawing } from "@/features/selection/draw";
+import { useSelection } from "@/features/selection/store";
 import { usePackage } from "@/features/source/store";
 import { useTheme } from "@/lib/theme";
 import { loadLog, placePackage, setView, useMapData } from "./footprints";
@@ -50,7 +52,8 @@ addProtocol(TILE_PROTOCOL, async (params, abort) => {
   const bytes = await withEngine(
     (e) => {
       ran = performance.now();
-      return e.queryBytes(tileSql(tile));
+      // While a selection is active, each footprint says whether it is selected.
+      return e.queryBytes(tileSql(tile, { highlight: useSelection.getState().active }));
     },
     { priority: "tile", signal: abort.signal },
   );
@@ -248,16 +251,17 @@ export function MapView() {
           { hover: true },
         );
       }
-      map.getCanvas().style.cursor = id === undefined ? "" : "pointer";
+      map.getCanvas().style.cursor = isDrawing() ? "crosshair" : id === undefined ? "" : "pointer";
     };
-    const onMove = (e: { point: { x: number; y: number } }) => setHover(at(e.point)?.id);
+    const onMove = (e: { point: { x: number; y: number } }) =>
+      setHover(isDrawing() ? undefined : at(e.point)?.id);
     const onLeave = () => setHover(undefined);
     // A click waits out a double-click's interval: a double-click zooms, and must not read
     // a feature's attributes on the way.
     let pending: ReturnType<typeof setTimeout> | undefined;
     const onClick = (e: { point: { x: number; y: number }; originalEvent: MouseEvent }) => {
       clearTimeout(pending);
-      if (e.originalEvent.detail > 1) return;
+      if (e.originalEvent.detail > 1 || isDrawing()) return;
       const point = e.point;
       pending = setTimeout(() => {
         const picked = pickedFrom(at(point)?.properties);
@@ -289,6 +293,17 @@ export function MapView() {
       clearTimeout(pending);
       unsubscribe();
     };
+  }, [map]);
+
+  // The drawn area, and the drawing tools' pointer and key handlers.
+  useEffect(() => (map ? attachDrawing(map) : undefined), [map]);
+
+  // A new selection re-cuts the tiles, which carry whether each footprint is selected.
+  useEffect(() => {
+    if (!map) return;
+    return useSelection.subscribe((s, p) => {
+      if (s.revision !== p.revision || s.active !== p.active) map.refreshTiles(SOURCES.footprints);
+    });
   }, [map]);
 
   // The basemap follows the theme; the package's sources and layers stay as they are.
