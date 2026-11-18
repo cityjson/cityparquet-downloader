@@ -48,7 +48,18 @@ export interface ResolvedSource {
 export type Fetch = (
   url: string,
   init?: { method?: "GET" | "HEAD" },
-) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
+) => Promise<{
+  ok: boolean;
+  headers: { get(name: string): string | null };
+  json(): Promise<unknown>;
+}>;
+
+/**
+ * Whether a probed file is there. A host that serves a single-page app answers every
+ * path with its HTML index page, and a Parquet file is never HTML.
+ */
+const isFile = (r: Awaited<ReturnType<Fetch>>) =>
+  r.ok && !(r.headers.get("content-type") ?? "").startsWith("text/html");
 
 export class SourceError extends Error {
   override name = "SourceError";
@@ -128,7 +139,7 @@ async function probe(dir: Url, fetch: Fetch): Promise<Url[]> {
   const found = await Promise.all(
     names.map((url) =>
       fetch(url, { method: "HEAD" }).then(
-        (r) => r.ok,
+        (r) => isFile(r),
         () => false,
       ),
     ),

@@ -7,7 +7,8 @@ Read this index, then the file of the feature you are verifying. `control` is
 ## Baseline preconditions
 
 - `pnpm install` has been run and the network is reachable.
-- `control launch` succeeded and `control doctor` passes.
+- `control launch` succeeded and `control doctor` passes. Without `--source` the page
+  opens `fixtures/delft/`.
 - `control browser goto` followed by `control browser wait --text "is ready" --timeout 90000`
   has returned: DuckDB is started.
 - Never drive an instance this run did not launch.
@@ -38,6 +39,6 @@ handles, required state, commands and observable proof.
 ## Features
 
 - [Start the app](./startup.md) covers the page loading and DuckDB starting with its extensions.
+- [Open a package](./open-package.md) covers opening the configured package and its summary.
 
-The app is at its first step, so this is the whole map. Each new user-facing feature
-adds a file here in the same change that adds the feature.
+Each new user-facing feature adds a file here in the same change that adds the feature.

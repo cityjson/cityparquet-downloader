@@ -6,8 +6,9 @@ description: Drive the CityParquet downloader web app (React + duckdb-wasm, in t
 # Verify the CityParquet downloader
 
 The app is one web page. A user opens it, DuckDB starts in the browser and loads its
-extensions, and everything else happens on that page. There is no backend, no login and
-no stored data: all state is in the browser tab.
+extensions, the app opens one CityParquet package (fixed at build time by
+`VITE_CITYPARQUET_URL`) and shows a summary of its tables. There is no backend, no login
+and no stored data: all state is in the browser tab.
 
 Everything here goes through one helper, run from the repository root:
 
@@ -16,7 +17,8 @@ node .claude/skills/verify-cityparquet-downloader/scripts/control.mjs <command>
 ```
 
 Below it is written as `control`. It needs `pnpm install` to have been run, Node 26, and
-the network (the page fetches the DuckDB extensions and the CityParquet data).
+the network (the page fetches the DuckDB extensions; with `--source` a remote package
+too).
 If Playwright's own Chromium is not installed, set `CHROMIUM_PATH` to a Chromium binary
 before `launch` (in Claude Code cloud sessions: `/opt/pw-browsers/chromium`).
 
@@ -26,25 +28,34 @@ there is to verify and the exact steps for each feature.
 ## Launch
 
 ```sh
-control launch
+control launch                                   # opens fixtures/delft/, served by Vite
+control launch --source https://cityparquet.open3d.city/data/3dbag/   # the national file
 ```
 
-Starts two things and records their pids in `.verify/runs/default/state.json`:
+`--source` is the package the page opens, passed to the dev server as
+`VITE_CITYPARQUET_URL`. It defaults to `/fixtures/delft/`, the fixture in the repository,
+so verification needs neither the 14 GB national file nor its host. Any directory,
+`.parquet` file or wildcard URL works; a relative one resolves against the page.
+
+`launch` starts two things and records their pids and the source in
+`.verify/runs/default/state.json`:
 
 - the Vite dev server on a free port of `127.0.0.1` (log: `.verify/runs/default/vite.log`),
 - a headless Chromium with its own empty profile (log: `chromium.log`).
 
 It prints the URL and returns once both answer. That is not yet "usable": the page is
-usable when DuckDB has started. Wait for it on the page itself:
+usable when DuckDB has started and the package is open. Wait for it on the page itself:
 
 ```sh
 control browser goto
 control browser wait --text "is ready" --timeout 90000
+control browser wait --role table --name Tables --timeout 120000
 ```
 
 The first start downloads about 34 MB of wasm plus the extensions, so allow a minute.
 If the text `DuckDB did not start` appears instead (role `alert`), the app is broken or
-the network is blocked; read it with `control browser text --role alert`.
+the network is blocked; read it with `control browser text --role alert`. If `Could not
+open the package` appears (role `alert`), the source is wrong or unreachable.
 
 `launch` refuses to start a second copy of the same run. For a second instance side by
 side, name it: add `--run other` to every command. Runs do not share ports, profiles or
@@ -56,9 +67,9 @@ evidence.
 control doctor
 ```
 
-Read-only. It checks that both processes this run started are alive, that the port
-serves this app (by its title), that Chromium answers, and that the checkout is still on
-the ref it was launched from. Run it first whenever something looks off. Exit code 1
+Read-only. It prints the package the run opens, and checks that both processes this run
+started are alive, that the port serves this app (by its title), that Chromium answers,
+and that the checkout is still on the ref it was launched from. Run it first whenever something looks off. Exit code 1
 means do not trust what you see: `control cleanup`, then `control launch`.
 
 ## Drive
@@ -83,7 +94,10 @@ Prefer roles and visible text. The page's stable handles today:
 
 - heading `CityParquet downloader`,
 - role `status`: `Starting DuckDB…`, then `DuckDB v… is ready, with …`,
-- role `alert`: `DuckDB did not start: …`.
+- role `status`: `Opening <package URL>…` while the package opens,
+- heading `Package`, the source URL and `Extent (WGS 84, lon/lat): …` (test id
+  `package-extent`), then role `table` named `Tables`, one row per object table,
+- role `alert`: `DuckDB did not start: …` or `Could not open the package`.
 
 A `status` or `alert` element has no accessible name, so wait for its text with
 `--text`, not with `--role status --name`.
@@ -105,7 +119,8 @@ Everything lands in `.verify/evidence/<run>/` (git-ignored). A proof contains:
 
 Drive the real path: click and type as a user would. Do not call application functions
 through `eval`, and do not replace the DuckDB engine or the network with a mock. The
-extensions and the data are fetched from their real hosts.
+extensions are fetched from their real hosts; the data from the fixture or the
+`--source` host.
 
 Name files after the feature and step, for example `--path startup/ready.png`.
 

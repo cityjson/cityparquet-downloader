@@ -13,10 +13,20 @@ function fakeFetch(
     seen.push(`${init?.method ?? "GET"} ${url}`);
     const body = json[url];
     const ok = body !== undefined || (init?.method === "HEAD" && files.includes(url));
-    return { ok, json: async () => body };
+    const type = body !== undefined ? "application/json" : "application/vnd.apache.parquet";
+    return { ok, headers: new Headers({ "content-type": type }), json: async () => body };
   };
   return Object.assign(fetch, { seen });
 }
+
+/** A host that answers every path with its HTML index page, as single-page hosts do. */
+const indexPageFetch: Fetch = async () => ({
+  ok: true,
+  headers: new Headers({ "content-type": "text/html; charset=utf-8" }),
+  json: async () => {
+    throw new SyntaxError("Unexpected token '<'");
+  },
+});
 
 const stac = (assets: Record<string, unknown>) => ({
   type: "Feature",
@@ -109,6 +119,12 @@ describe("resolveSource", () => {
     await expect(
       resolveSource(parseSource("https://h/empty/", BASE), fakeFetch({})),
     ).rejects.toThrow(SourceError);
+  });
+
+  test("an HTML page in place of every file is not a package", async () => {
+    await expect(
+      resolveSource(parseSource("https://h/none/", BASE), indexPageFetch),
+    ).rejects.toThrow(/no CityParquet files/);
   });
 
   test("a single file is a package of one table, read without any request", async () => {

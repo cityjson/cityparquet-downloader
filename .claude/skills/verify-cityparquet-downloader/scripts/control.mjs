@@ -2,7 +2,7 @@
 // Drives the CityParquet downloader for verification: one dev server and one headless
 // Chromium per run, both started here and only ever stopped by pid.
 //
-//   control.mjs launch | doctor | cleanup
+//   control.mjs launch [--source <package URL>] | doctor | cleanup
 //   control.mjs browser <goto|click|fill|press|wait|text|snapshot|screenshot|eval> [--flags]
 //
 // Every command takes --run <name> (default "default"); runs with different names can
@@ -30,6 +30,9 @@ const runDir = path.join(repo, ".verify", "runs", run);
 const evidenceDir = path.join(repo, ".verify", "evidence", run);
 const stateFile = path.join(runDir, "state.json");
 const TITLE = "CityParquet downloader";
+// The package a launch opens unless --source names another: the fixture the dev server
+// serves, so verification needs neither the 14 GB national file nor its host.
+const DEFAULT_SOURCE = "/fixtures/delft/";
 
 const readState = () =>
   fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, "utf8")) : null;
@@ -80,6 +83,7 @@ async function launch() {
   const cdpPort = await freePort();
   const url = `http://127.0.0.1:${port}/`;
 
+  const source = flags.source ?? DEFAULT_SOURCE;
   const viteLog = fs.openSync(path.join(runDir, "vite.log"), "w");
   const vite = spawn(
     process.execPath,
@@ -91,7 +95,12 @@ async function launch() {
       String(port),
       "--strictPort",
     ],
-    { cwd: repo, detached: true, stdio: ["ignore", viteLog, viteLog] },
+    {
+      cwd: repo,
+      detached: true,
+      stdio: ["ignore", viteLog, viteLog],
+      env: { ...process.env, VITE_CITYPARQUET_URL: source },
+    },
   );
   vite.unref();
 
@@ -113,6 +122,7 @@ async function launch() {
   const state = {
     run,
     url,
+    source,
     port,
     cdpPort,
     vitePid: vite.pid,
@@ -154,6 +164,7 @@ async function doctor() {
     head() === state.head,
     `${state.head} -> ${head()}`,
   );
+  console.log(`package: ${state.source}`);
   for (const c of checks)
     console.log(`${c.ok ? "ok  " : "FAIL"} ${c.name}${c.detail ? ` (${c.detail})` : ""}`);
   if (checks.some((c) => !c.ok)) process.exit(1);
