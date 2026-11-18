@@ -1,50 +1,36 @@
-import { useEffect, useState } from "react";
-import { createEngine } from "./engine/duckdb";
+import { useEffect } from "react";
+import { useEngineStatus } from "@/engine/session";
+import { PackageSummary } from "@/features/source/PackageSummary";
+import { openSourcePackage } from "@/features/source/store";
 
-type Status =
-  | { state: "starting" }
-  | { state: "ready"; duckdb: string; extensions: string[] }
-  | { state: "failed"; message: string };
+function EngineStatus() {
+  const status = useEngineStatus();
+  switch (status.state) {
+    case "starting":
+      return <p role="status">Starting DuckDB…</p>;
+    case "ready":
+      return (
+        <p role="status">
+          DuckDB {status.version} is ready, with {status.extensions.join(", ")}.
+        </p>
+      );
+    case "failed":
+      return <p role="alert">DuckDB did not start: {status.message}</p>;
+  }
+}
 
 export function App() {
-  const [status, setStatus] = useState<Status>({ state: "starting" });
-
   useEffect(() => {
-    let cancelled = false;
-    const started = createEngine();
-    started
-      .then(async (engine) => {
-        const [version] = await engine.query("SELECT library_version AS v FROM pragma_version()");
-        const loaded = await engine.query(
-          "SELECT extension_name AS name FROM duckdb_extensions() WHERE loaded ORDER BY name",
-        );
-        if (!cancelled) {
-          setStatus({
-            state: "ready",
-            duckdb: String(version?.v),
-            extensions: loaded.map((row) => String(row.name)),
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setStatus({ state: "failed", message: String(error) });
-      });
-    return () => {
-      cancelled = true;
-      void started.then((engine) => engine.terminate()).catch(() => undefined);
-    };
+    void openSourcePackage();
   }, []);
 
   return (
-    <main>
-      <h1>CityParquet downloader</h1>
-      {status.state === "starting" && <p role="status">Starting DuckDB…</p>}
-      {status.state === "ready" && (
-        <p role="status">
-          DuckDB {status.duckdb} is ready, with {status.extensions.join(", ")}.
-        </p>
-      )}
-      {status.state === "failed" && <p role="alert">DuckDB did not start: {status.message}</p>}
+    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-lg">CityParquet downloader</h1>
+        <EngineStatus />
+      </header>
+      <PackageSummary />
     </main>
   );
 }
