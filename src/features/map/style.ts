@@ -97,14 +97,7 @@ export function overlayLayers(theme: Theme): LayerSpecification[] {
       layout: { visibility: "none" },
       paint: {
         "fill-color": colours([]),
-        "fill-opacity": [
-          "case",
-          ["boolean", ["feature-state", "selected"], false],
-          0.95,
-          ["boolean", ["feature-state", "hover"], false],
-          0.85,
-          0.55,
-        ],
+        "fill-opacity": fillOpacity([]),
       },
     },
     {
@@ -159,6 +152,25 @@ export function colours(types: readonly string[]): ExpressionSpecification | str
     ...unique.flatMap((t) => [t, colourOf(t)]),
     colourOf(""),
   ] as unknown as ExpressionSpecification;
+}
+
+/**
+ * Fill opacity: stronger for the hovered and the selected feature. A table drawn as bbox
+ * rectangles is filled faintly, since one object's box can cover a whole district.
+ */
+export function fillOpacity(bboxTables: readonly string[]): ExpressionSpecification {
+  return [
+    "*",
+    ["case", ["in", ["get", "tbl"], ["literal", [...bboxTables]]], 0.25, 1],
+    [
+      "case",
+      ["boolean", ["feature-state", "selected"], false],
+      0.95,
+      ["boolean", ["feature-state", "hover"], false],
+      0.85,
+      0.55,
+    ],
+  ];
 }
 
 /** Outline colour: the type's, or a strong one for the selected feature. */

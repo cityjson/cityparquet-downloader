@@ -282,7 +282,7 @@ async function browser() {
         break;
       case "wait":
         await target().waitFor({ state: flags.state ?? "visible", timeout });
-        console.log("visible");
+        console.log(flags.state ?? "visible");
         break;
       case "text":
         // biome-ignore lint/performance/useDomNodeTextContent: the rendered text is what a user reads

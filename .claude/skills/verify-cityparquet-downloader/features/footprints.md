@@ -13,7 +13,7 @@ geometry are drawn as the rectangles of their objects' bounding boxes.
 - `footprints-progress` shows `, loading k of n row groups` and `loading` per row group until each is read.
 - `footprints-prune` reads only the touched row groups' byte ranges of the file, and only the footprint columns.
 - `footprints-cache` reads a row group once: panning back to it reads nothing again.
-- `footprints-bbox` draws a table without LoD 0 (Chuo-ku `bridge`) as bbox rectangles.
+- `footprints-bbox` draws a table without LoD 0 (Chuo-ku `bridge`) as faint bbox rectangles, which never hide a footprint under them.
 - `footprints-error` shows `A row group did not load` with the reason and `Try again`.
 
 ## How to get to it (user POV)
@@ -31,7 +31,7 @@ Preconditions:
 - **Prune.** Right after, `control network summary --host cityparquet.open3d.city` lists three range GETs per row group in view (12 for four), about 21 MB in all, each range inside the byte span of its row group. Nothing near the whole file (14.4 GB) and no other row group's columns.
 - **Timing.** `control browser eval --js "window.__mapLogs.loads"` gives each row group's read in ms (2 to 4 s each on 3DBAG); `window.__mapLogs.tiles` each tile's queue wait and run time.
 - **Cache.** Pan away and back: `control browser wheel --x $x --y $y --dy 400` (zoom out a little), then double-click Delft again. Mark the network before returning; `control network summary --host cityparquet.open3d.city` lists no parquet GETs, and the status shows the same feature count at once.
-- **Bbox fallback.** `control launch --run chuo --source /fixtures/chuo-ku/`, then in that run wait for `Footprints:` without `, loading`. The status reads `Footprints: 641 features` (566 `building`, 75 `bridge`), and the legend lists `Bridge`, `BridgeConstructiveElement` and `BridgeInstallation` under `bridge`. Zoom in on the bridge (`control browser map-at --lon 139.787 --lat 35.682`, double-click twice): screenshot `footprints/chuo-ku/bridge.png` shows amber rectangles. `control cleanup --run chuo` afterwards.
+- **Bbox fallback.** `control launch --run chuo --source /fixtures/chuo-ku/` and `control browser goto --run chuo`, then in that run (`--run chuo` on each `browser` command) wait for `Footprints:` without `, loading`. The status reads `Footprints: 641 features` (566 `building`, 75 `bridge`), and the legend lists `Bridge`, `BridgeConstructiveElement` and `BridgeInstallation` under `bridge`. Zoom in on the bridge (`control browser map-at --lon 139.787 --lat 35.682`, double-click twice; the status then reads `Footprints: 478 features`): screenshot `footprints/chuo-ku/bridge.png` shows amber rectangles beside the buildings, and no popup has opened. The one `Bridge` object's box spans almost the whole package, so the map has a faint amber tint: rectangles are filled at a quarter of a footprint's opacity for that reason. `control cleanup --run chuo` afterwards.
 - **Proof.** Snapshot `footprints/<source>/loaded.aria.txt` with the status, the list and the legend.
 
 ## Gotchas

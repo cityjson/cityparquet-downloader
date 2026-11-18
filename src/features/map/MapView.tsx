@@ -4,6 +4,7 @@ import {
   addProtocol,
   GeoJSONSource,
   type GeoJSONSourceSpecification,
+  type MapGeoJSONFeature,
   MapLibreMap,
   NavigationControl,
   setWorkerUrl,
@@ -12,7 +13,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { parseTileUrl, TILE_LAYER, TILE_PROTOCOL, tileSql } from "@/core";
+import { footprintOf, parseTileUrl, TILE_LAYER, TILE_PROTOCOL, tileSql } from "@/core";
 import { withEngine } from "@/engine/session";
 import { usePackage } from "@/features/source/store";
 import { useTheme } from "@/lib/theme";
@@ -23,6 +24,7 @@ import { closePopup, openPopup, pickedFrom, usePopup } from "./popup";
 import {
   basemapStyle,
   colours,
+  fillOpacity,
   keepOverlay,
   LAYERS,
   legendFilter,
@@ -68,6 +70,40 @@ if (import.meta.env.DEV) {
 }
 
 /** maplibre 6 returns a half-built map, with no painter, when WebGL 2 is unavailable. */
+/**
+ * The feature a pointer means among those under it: a footprint before a table's bbox
+ * rectangle, and the smaller of two, since a large box covers the objects inside it.
+ */
+function pick(features: MapGeoJSONFeature[], bboxTables: readonly string[]) {
+  const rank = (f: MapGeoJSONFeature) => {
+    const g = f.geometry;
+    const coords: unknown[] = "coordinates" in g ? [g.coordinates].flat(4) : [];
+    let [xmin, ymin, xmax, ymax] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (let i = 0; i + 1 < coords.length; i += 2) {
+      const [x, y] = [Number(coords[i]), Number(coords[i + 1])];
+      [xmin, xmax, ymin, ymax] = [
+        Math.min(xmin, x),
+        Math.max(xmax, x),
+        Math.min(ymin, y),
+        Math.max(ymax, y),
+      ];
+    }
+    const box = bboxTables.includes(String(f.properties.tbl)) ? 1 : 0;
+    return [box, (xmax - xmin) * (ymax - ymin)] as const;
+  };
+  let best: MapGeoJSONFeature | undefined;
+  let bestRank: readonly [number, number] = [Infinity, Infinity];
+  for (const f of features) {
+    const r = rank(f);
+    if (r[0] < bestRank[0] || (r[0] === bestRank[0] && r[1] < bestRank[1]))
+      [best, bestRank] = [f, r];
+  }
+  return best;
+}
+
+/** How long a click waits for a second one, which would make it a zoom. */
+const DOUBLE_CLICK_MS = 250;
+
 const hasPainter = (map: MapLibreMap) => (map as unknown as { painter?: unknown }).painter != null;
 
 export function MapView() {
@@ -170,8 +206,13 @@ export function MapView() {
 
   // The legend: colours for the types seen, and the filter that hides what it hides.
   const theme = useTheme((s) => s.theme);
+  const bboxTables = useRef<readonly string[]>([]);
   useEffect(() => {
     if (!map) return;
+    bboxTables.current = (info?.tables ?? [])
+      .filter((t) => footprintOf(t).kind === "bbox")
+      .map((t) => t.name);
+    map.setPaintProperty(LAYERS.footprintsFill, "fill-opacity", fillOpacity(bboxTables.current));
     const apply = ({ seen, hidden } = useLegend.getState()) => {
       const types = Object.values(seen).flat();
       map.setPaintProperty(LAYERS.footprintsFill, "fill-color", colours(types));
@@ -181,13 +222,16 @@ export function MapView() {
     };
     apply();
     return useLegend.subscribe((s) => apply(s));
-  }, [map, theme]);
+  }, [map, theme, info]);
 
   // Hover and click on footprints; the clicked one stays marked while its popup is open.
   useEffect(() => {
     if (!map) return;
     const at = (p: { x: number; y: number }) =>
-      map.queryRenderedFeatures([p.x, p.y], { layers: [LAYERS.footprintsFill] })[0];
+      pick(
+        map.queryRenderedFeatures([p.x, p.y], { layers: [LAYERS.footprintsFill] }),
+        bboxTables.current,
+      );
     let hovered: string | number | undefined;
     const setHover = (id: string | number | undefined) => {
       if (id === hovered) return;
@@ -208,10 +252,18 @@ export function MapView() {
     };
     const onMove = (e: { point: { x: number; y: number } }) => setHover(at(e.point)?.id);
     const onLeave = () => setHover(undefined);
-    const onClick = (e: { point: { x: number; y: number } }) => {
-      const picked = pickedFrom(at(e.point)?.properties);
-      if (picked) void openPopup(picked);
-      else closePopup();
+    // A click waits out a double-click's interval: a double-click zooms, and must not read
+    // a feature's attributes on the way.
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const onClick = (e: { point: { x: number; y: number }; originalEvent: MouseEvent }) => {
+      clearTimeout(pending);
+      if (e.originalEvent.detail > 1) return;
+      const point = e.point;
+      pending = setTimeout(() => {
+        const picked = pickedFrom(at(point)?.properties);
+        if (picked) void openPopup(picked);
+        else closePopup();
+      }, DOUBLE_CLICK_MS);
     };
     map.on("mousemove", onMove);
     map.on("mouseout", onLeave);
@@ -234,6 +286,7 @@ export function MapView() {
       map.off("mousemove", onMove);
       map.off("mouseout", onLeave);
       map.off("click", onClick);
+      clearTimeout(pending);
       unsubscribe();
     };
   }, [map]);
