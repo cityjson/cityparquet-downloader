@@ -153,6 +153,7 @@ try {
       .then(() => "error"),
   ]).catch(() => "timeout");
   const at = ms();
+  // biome-ignore lint/performance/useDomNodeTextContent: the rendered text is what a user reads
   const text = await page.locator("main").innerText();
   const get = requests.filter((r) => r.method === "GET");
   console.log(
