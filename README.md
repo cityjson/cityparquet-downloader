@@ -30,6 +30,9 @@ a single `.parquet` file, or a wildcard such as `…/**/building.parquet` that
 `metadata.json` expands. A relative URL resolves against the page, so
 `VITE_CITYPARQUET_URL=/fixtures/delft/ just dev` opens the bundled fixture.
 
+The basemap is OpenFreeMap's, which needs no key. With `VITE_CARTO_KEY` set at build time
+it is CARTO's Positron and Dark Matter instead.
+
 ## Commands
 
 [`just`](https://just.systems) runs everything; `just` alone lists the recipes.

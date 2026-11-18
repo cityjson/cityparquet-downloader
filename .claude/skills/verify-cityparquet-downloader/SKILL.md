@@ -5,10 +5,12 @@ description: Drive the CityParquet downloader web app (React + duckdb-wasm, in t
 
 # Verify the CityParquet downloader
 
-The app is one web page. A user opens it, DuckDB starts in the browser and loads its
-extensions, the app opens one CityParquet package (fixed at build time by
-`VITE_CITYPARQUET_URL`) and shows a summary of its tables. There is no backend, no login
-and no stored data: all state is in the browser tab.
+The app is one web page: a full-window map with a side panel. A user opens it, DuckDB
+starts in the browser and loads its extensions, the app opens one CityParquet package
+(fixed at build time by `VITE_CITYPARQUET_URL`), summarises its tables in the panel and
+fits the map to it. Zoomed in far enough, the map reads and draws footprints; clicking
+one shows its attributes. There is no backend, no login and no stored data: all state is
+in the browser tab.
 
 Everything here goes through one helper, run from the repository root:
 
@@ -37,13 +39,17 @@ control launch --source https://cityparquet.open3d.city/data/3dbag/   # the nati
 so verification needs neither the 14 GB national file nor its host. Any directory,
 `.parquet` file or wildcard URL works; a relative one resolves against the page.
 
-`launch` starts two things and records their pids and the source in
+`launch` starts three things and records their pids and the source in
 `.verify/runs/default/state.json`:
 
 - the Vite dev server on a free port of `127.0.0.1` (log: `.verify/runs/default/vite.log`),
-- a headless Chromium with its own empty profile (log: `chromium.log`).
+- a headless Chromium with its own empty profile (log: `chromium.log`), 1440 by 900, with
+  `--enable-unsafe-swiftshader`: there is no GPU, and the map needs WebGL 2, which
+  SwiftShader provides,
+- a network recorder connected to that Chromium, which logs every request the page and
+  its workers make to `network.jsonl` (log: `recorder.log`).
 
-It prints the URL and returns once both answer. That is not yet "usable": the page is
+It prints the URL and returns once all three answer. That is not yet "usable": the page is
 usable when DuckDB has started and the package is open. Wait for it on the page itself:
 
 ```sh
@@ -67,8 +73,8 @@ evidence.
 control doctor
 ```
 
-Read-only. It prints the package the run opens, and checks that both processes this run
-started are alive, that the port serves this app (by its title), that Chromium answers,
+Read-only. It prints the package the run opens, and checks that the three processes this
+run started are alive, that the port serves this app (by its title), that Chromium answers,
 and that the checkout is still on the ref it was launched from. Run it first whenever something looks off. Exit code 1
 means do not trust what you see: `control cleanup`, then `control launch`.
 
@@ -81,6 +87,11 @@ page, and disconnects. The page keeps its state between calls.
 | --- | --- |
 | `control browser goto [--path /]` | Loads the app (a reload resets all state) |
 | `control browser click --role button --name "…"` | Clicks |
+| `control browser click --x 750 --y 391 [--count 2]` | Clicks a page pixel, such as a footprint on the map; `--count 2` double-clicks, which zooms the map in one level around it |
+| `control browser hover --x … --y …` | Moves the mouse there |
+| `control browser wheel --x … --y … --dy -300` | Scrolls there: negative zooms the map in |
+| `control browser map-view` | Prints the map's zoom, centre and bounds |
+| `control browser map-at --lon 4.357 --lat 52.011` | Prints the page pixel of a point, for `click`, `hover` and `wheel` |
 | `control browser fill --role textbox --name "…" --value "…"` | Types into a field |
 | `control browser press --key Enter` | Presses a key |
 | `control browser wait --text "…" [--timeout ms]` | Waits until it is visible |
@@ -92,18 +103,42 @@ page, and disconnects. The page keeps its state between calls.
 Targets are `--role` with an optional `--name`, `--label`, `--text` or `--testid`.
 Prefer roles and visible text. The page's stable handles today:
 
-- heading `CityParquet downloader`,
+- heading `CityParquet downloader`, in the region `Side panel`, with the button
+  `Dark theme` (or `Light theme`); the button `Hide panel` (or `Show panel`) over the map,
 - role `status`: `Starting DuckDB…`, then `DuckDB v… is ready, with …`,
 - role `status`: `Opening <package URL>…` while the package opens,
 - heading `Package`, the source URL and `Extent (WGS 84, lon/lat): …` (test id
   `package-extent`), then role `table` named `Tables`, one row per object table,
-- role `alert`: `DuckDB did not start: …` or `Could not open the package`.
+- role `alert`: `DuckDB did not start: …` or `Could not open the package`,
+- region `Map` (MapLibre's canvas), with the buttons `Zoom in` and `Zoom out` and an
+  unnamed group holding the basemap's credit links,
+- heading `View` and the status line with test id `map-status`: `Overview: N row groups,
+  M features in view` or `Footprints: N features`, with `, loading k of n row groups`
+  while reads run; in the footprint regime the list `Row groups in view`,
+- heading `Legend`, a checkbox `<table> table` per table and `<Type> in <table>` per
+  object type,
+- role `dialog` named `Feature attributes` with the table `Attributes` and the button
+  `Close`.
+
+`map-view` and `map-at` read `window.__map`, and `eval --js "window.__mapLogs"` reads
+how long each tile query and footprint read took; both exist in the dev server only.
 
 A `status` or `alert` element has no accessible name, so wait for its text with
 `--text`, not with `--role status --name`.
 
 Use `eval` only to read. Changing the page through it is not a user action and proves
 nothing.
+
+## Network
+
+```sh
+control network mark                       # start counting from now
+control network summary [--host <name>]    # requests, GETs and bytes per host since the mark
+```
+
+`summary` also lists every `.parquet` GET with its `Range` header, status and bytes, so a
+step's reads can be checked against the row groups it should touch. Byte counts against
+the fixtures say little: the dev server is local. Measure against the real host.
 
 ## Evidence
 
@@ -130,7 +165,7 @@ Name files after the feature and step, for example `--path startup/ready.png`.
 control cleanup
 ```
 
-Stops exactly the two process groups this run started (by the recorded pids, never by
+Stops exactly the three process groups this run started (by the recorded pids, never by
 name) and removes `.verify/runs/<run>/`, including the browser profile. It keeps
 `.verify/evidence/<run>/`. Run it after every attempt, failed ones included.
 

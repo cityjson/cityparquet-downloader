@@ -65,3 +65,21 @@
     @apply text-link hover:text-link-hover;
   }
 }
+
+/* MapLibre's controls, in the app's colours for either theme. */
+.maplibregl-ctrl-attrib.maplibregl-ctrl-attrib {
+  background-color: color-mix(in srgb, var(--background) 80%, transparent);
+  color: var(--muted-foreground);
+}
+.maplibregl-ctrl-attrib a {
+  color: inherit;
+}
+.dark .maplibregl-ctrl-group {
+  background-color: var(--card);
+}
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+.dark .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(1);
+}

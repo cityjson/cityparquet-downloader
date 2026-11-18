@@ -62,22 +62,31 @@ record it in `docs/findings.md`; do not work around it here.
 
 ### Map
 
-- MapLibre GL JS. Basemap: Carto raster tiles on OSM data, Positron for the light theme
-  and Dark Matter for the dark theme.
+- MapLibre GL JS, full window beside a side panel that folds away. Basemap: OpenFreeMap's
+  `positron` for the light theme and `dark` for the dark one, vector tiles on OSM data.
+  With `VITE_CARTO_KEY` at build time it is CARTO's `light_all` and `dark_all` rasters
+  instead, which need the key. The theme follows the system until the user switches it.
+- The camera fits the package's WGS 84 extent once it opens.
 - Footprints come from the lowest LoD0 geometry column. A table without one falls back
-  to `bbox` rectangles.
-- Rendering has three regimes, chosen by how many row groups the view touches:
-  1. overview: row-group rectangles from footer statistics, shaded by row count;
-  2. when the view touches at most N row groups: fetch `id`, `object_type`, `bbox` and
-     the LoD0 geometry of those row groups into a local DuckDB table, once per row
-     group, in a bounded cache;
-  3. MapLibre requests vector tiles through `addProtocol`; each tile is a query on the
-     local table with `ST_AsMVTGeom` and `ST_AsMVT`.
-  If `ST_AsMVT` is unusable in wasm, the local rows go to MapLibre as GeoJSON instead.
-- Clicking a feature opens a popup with its attributes as a key and value table,
-  fetched for that one row.
-- A legend lists the city object types present, grouped by table, each with a colour
-  and a toggle. Hidden types are left out of the selection too.
+  to `bbox` rectangles, filled faintly.
+- Two regimes, chosen by the row groups the view touches:
+  1. overview, while the view touches more than 4 row groups and more than 20,000 rows:
+     row-group outlines from footer statistics, shaded by rows per square degree;
+  2. footprints otherwise: each touched row group's `id`, `feature_id`, `object_type` and
+     footprint are read into the local table `map_features`, in EPSG:3857, once, chosen
+     by `file_row_number`. A bounded cache (600,000 rows) evicts the least recently used
+     row group out of view. MapLibre asks for vector tiles through `addProtocol`; each
+     tile is an `ST_AsMVT` query on the local table.
+- One DuckDB connection serves everything through a priority queue: interactive reads
+  first, then tiles, then row-group loads. A tile or load for a view the map has left is
+  called off before it starts.
+- Clicking a footprint opens a panel with its attributes, read for that one row by its
+  row number; geometry, appearance and `bbox` columns are left out.
+- A legend lists every table, and under each the city object types its loaded
+  footprints have, each with a colour and a toggle. Hidden types are left out of the
+  selection too (`hiddenIn`).
+
+Measurements on 3DBAG are in [findings.md](findings.md).
 
 ### Selection
 

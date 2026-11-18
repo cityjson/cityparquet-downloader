@@ -40,5 +40,9 @@ handles, required state, commands and observable proof.
 
 - [Start the app](./startup.md) covers the page loading and DuckDB starting with its extensions.
 - [Open a package](./open-package.md) covers opening the configured package and its summary.
+- [Map](./map.md) covers the map, the camera fitting the package, the overview of row groups, the basemap and the theme.
+- [Footprints](./footprints.md) covers reading and drawing footprints when zoomed in, their cache, and the bbox fallback.
+- [Legend](./legend.md) covers the object types on the map, their colours and hiding them.
+- [Attribute popup](./attribute-popup.md) covers hovering and clicking a footprint to read its attributes.
 
 Each new user-facing feature adds a file here in the same change that adds the feature.
