@@ -1,0 +1,73 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json"
+  ],
+  "id": "chuo-ku-fixture",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          139.7824602,
+          35.6784328
+        ],
+        [
+          139.7912046,
+          35.6784328
+        ],
+        [
+          139.7912046,
+          35.6852915
+        ],
+        [
+          139.7824602,
+          35.6852915
+        ],
+        [
+          139.7824602,
+          35.6784328
+        ]
+      ]
+    ]
+  },
+  "bbox": [
+    139.7824602,
+    35.6784328,
+    139.7912046,
+    35.6852915
+  ],
+  "properties": {
+    "datetime": "2026-09-21T16:21:52Z",
+    "title": "chuo-ku test fixture, cut from https://cityparquet.open3d.city/data/plateau/chuo-ku/"
+  },
+  "links": [
+    {
+      "rel": "derived_from",
+      "href": "https://cityparquet.open3d.city/data/plateau/chuo-ku/"
+    }
+  ],
+  "assets": {
+    "building.parquet": {
+      "href": "./building.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": [
+        "data",
+        "cityparquet-objects"
+      ],
+      "file:size": 790340,
+      "file:checksum": "12209081378f7b8588d8f2f6dcf663b3173b98fa900f76e9c617f8daedca69071719"
+    },
+    "bridge.parquet": {
+      "href": "./bridge.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": [
+        "data",
+        "cityparquet-objects"
+      ],
+      "file:size": 178225,
+      "file:checksum": "1220a43324d8ce5ef5cadb580088b4e27a5afe842360ff54dfdab78d05e7b12adc99"
+    }
+  }
+}
