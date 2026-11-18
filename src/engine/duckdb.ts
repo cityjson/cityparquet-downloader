@@ -5,6 +5,8 @@ import baseWasm from "@duckdb/duckdb-wasm/dist/duckdb-base.wasm?url";
 import baseWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-base.worker.js?url";
 
 export interface BrowserEngine extends Engine {
+  /** The first column of the first row as bytes (a BLOB, such as a vector tile); null for NULL or no row. */
+  queryBytes(sql: string): Promise<Uint8Array | null>;
   /** Reads a file DuckDB wrote to its virtual file system (a `COPY … TO` target). */
   readFile(path: string): Promise<Uint8Array>;
   /** Frees virtual-FS files once they are no longer needed. */
@@ -63,6 +65,10 @@ export async function createEngine(): Promise<BrowserEngine> {
     return {
       async query(sql) {
         return toRows(await conn.query(sql));
+      },
+      async queryBytes(sql) {
+        const value: unknown = (await conn.query(sql)).getChildAt(0)?.get(0);
+        return value instanceof Uint8Array ? value : null;
       },
       async exec(sql) {
         await conn.query(sql);

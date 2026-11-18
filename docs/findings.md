@@ -101,7 +101,7 @@ scalar). On `fixtures/delft/` in Chromium, one run:
 
 Each tile is
 `ST_AsMVT({id, object_type, geom: ST_AsMVTGeom(g, ST_Extent(ST_TileEnvelope(z, x, y)))}, 'building')`
-over the rows that `ST_Intersects` the tile envelope. `tests/browser/spatial.test.ts`
+over the rows that `ST_Intersects` the tile envelope. `tests/browser/map.test.ts`
 keeps this working.
 
 ## Other facts later phases need
