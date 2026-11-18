@@ -1,0 +1,125 @@
+---
+name: verify-cityparquet-downloader
+description: Drive the CityParquet downloader web app (React + duckdb-wasm, in the browser) the way a user does and capture proof. Use to prove a change works in the real app, to reproduce a UI bug, or whenever tests pass but you have not seen the page do it.
+---
+
+# Verify the CityParquet downloader
+
+The app is one web page. A user opens it, DuckDB starts in the browser and loads its
+extensions, and everything else happens on that page. There is no backend, no login and
+no stored data: all state is in the browser tab.
+
+Everything here goes through one helper, run from the repository root:
+
+```sh
+node .claude/skills/verify-cityparquet-downloader/scripts/control.mjs <command>
+```
+
+Below it is written as `control`. It needs `pnpm install` to have been run, Node 26, and
+the network (the page fetches the DuckDB extensions and the CityParquet data).
+If Playwright's own Chromium is not installed, set `CHROMIUM_PATH` to a Chromium binary
+before `launch` (in Claude Code cloud sessions: `/opt/pw-browsers/chromium`).
+
+Read [features/README.md](features/README.md) before driving: it is the map of what
+there is to verify and the exact steps for each feature.
+
+## Launch
+
+```sh
+control launch
+```
+
+Starts two things and records their pids in `.verify/runs/default/state.json`:
+
+- the Vite dev server on a free port of `127.0.0.1` (log: `.verify/runs/default/vite.log`),
+- a headless Chromium with its own empty profile (log: `chromium.log`).
+
+It prints the URL and returns once both answer. That is not yet "usable": the page is
+usable when DuckDB has started. Wait for it on the page itself:
+
+```sh
+control browser goto
+control browser wait --text "is ready" --timeout 90000
+```
+
+The first start downloads about 34 MB of wasm plus the extensions, so allow a minute.
+If the text `DuckDB did not start` appears instead (role `alert`), the app is broken or
+the network is blocked; read it with `control browser text --role alert`.
+
+`launch` refuses to start a second copy of the same run. For a second instance side by
+side, name it: add `--run other` to every command. Runs do not share ports, profiles or
+evidence.
+
+## Doctor
+
+```sh
+control doctor
+```
+
+Read-only. It checks that both processes this run started are alive, that the port
+serves this app (by its title), that Chromium answers, and that the checkout is still on
+the ref it was launched from. Run it first whenever something looks off. Exit code 1
+means do not trust what you see: `control cleanup`, then `control launch`.
+
+## Drive
+
+Each `control browser` call connects to the running Chromium, does one thing on the
+page, and disconnects. The page keeps its state between calls.
+
+| Command | Does |
+| --- | --- |
+| `control browser goto [--path /]` | Loads the app (a reload resets all state) |
+| `control browser click --role button --name "…"` | Clicks |
+| `control browser fill --role textbox --name "…" --value "…"` | Types into a field |
+| `control browser press --key Enter` | Presses a key |
+| `control browser wait --text "…" [--timeout ms]` | Waits until it is visible |
+| `control browser text --role status` | Prints the element's text |
+| `control browser eval --js "document.title"` | Runs read-only JavaScript, prints JSON |
+| `control browser snapshot [--path name.aria.txt]` | Saves the URL, title and ARIA tree |
+| `control browser screenshot [--path name.png]` | Saves a screenshot |
+
+Targets are `--role` with an optional `--name`, `--label`, `--text` or `--testid`.
+Prefer roles and visible text. The page's stable handles today:
+
+- heading `CityParquet downloader`,
+- role `status`: `Starting DuckDB…`, then `DuckDB v… is ready, with …`,
+- role `alert`: `DuckDB did not start: …`.
+
+A `status` or `alert` element has no accessible name, so wait for its text with
+`--text`, not with `--role status --name`.
+
+Use `eval` only to read. Changing the page through it is not a user action and proves
+nothing.
+
+## Evidence
+
+Everything lands in `.verify/evidence/<run>/` (git-ignored). A proof contains:
+
+- the action and the resulting state, not only the last screen: snapshot or screenshot
+  before and after the step that matters;
+- an ARIA snapshot and a screenshot in which the app heading is visible;
+- for anything the page claims about data (a count, an extent, a version), a second
+  reading that does not come from the same element, for example another view of the
+  page or the file the app produced;
+- for a download, the downloaded file itself, opened and checked, not the "done" message.
+
+Drive the real path: click and type as a user would. Do not call application functions
+through `eval`, and do not replace the DuckDB engine or the network with a mock. The
+extensions and the data are fetched from their real hosts.
+
+Name files after the feature and step, for example `--path startup/ready.png`.
+
+## Cleanup
+
+```sh
+control cleanup
+```
+
+Stops exactly the two process groups this run started (by the recorded pids, never by
+name) and removes `.verify/runs/<run>/`, including the browser profile. It keeps
+`.verify/evidence/<run>/`. Run it after every attempt, failed ones included.
+
+## Helpers
+
+- `scripts/control.mjs` is the only helper. Its commands are the ones above; all take
+  `--run <name>`.
