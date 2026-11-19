@@ -1,13 +1,13 @@
 # Start the app
 
 Opening the page starts DuckDB in the browser and loads the extensions the app works
-with. The user sees a short starting message, then a line stating the DuckDB version and
-the loaded extensions, or an error that says why it did not start.
+with. The user sees a short starting message, then a line stating the DuckDB version,
+whose tooltip lists the loaded extensions, or an error that says why it did not start.
 
 ## Sub-features
 
 - `startup-progress` shows that DuckDB is starting.
-- `startup-ready` reports the DuckDB version and the loaded extensions.
+- `startup-ready` reports the DuckDB version, and the loaded extensions in its title.
 - `startup-extensions` includes `cityjson`, `three_d`, `parquet` and `spatial` among them, and not `httpfs`.
 - `startup-reload` reaches the ready state again after a reload.
 
@@ -24,7 +24,7 @@ Preconditions:
 
 - **Open.** Load the page. Run `control browser goto`. The heading `CityParquet downloader` is present.
 - **Ready.** Wait for DuckDB. Run `control browser wait --text "is ready" --timeout 90000`. It prints `visible`.
-- **Version and extensions.** Read the status line. Run `control browser text --role status`. It reads `DuckDB v2.… is ready, with …` and the list contains `cityjson`, `three_d`, `parquet` and `spatial`, and not `httpfs`.
+- **Version and extensions.** Read the status line. Run `control browser text --role status`. It reads `DuckDB v2.… is ready.` Then `control browser eval --js "document.querySelector('[role=status]').title"` prints `Extensions: …`, and the list contains `cityjson`, `three_d`, `parquet` and `spatial`, and not `httpfs`.
 - **Proof.** Run `control browser snapshot --path startup/ready.aria.txt` and `control browser screenshot --path startup/ready.png`. Both show the heading and the status line.
 - **Reload.** Run `control browser goto` again, then the Ready step. The same status line returns.
 

@@ -5,8 +5,6 @@ import { FOOTPRINT_ROW_GROUP_LIMIT, FOOTPRINT_SMALL_VIEW_ROWS } from "@/core";
 import { formatCount } from "@/features/source/format";
 import { retryFailed, useMapData } from "./footprints";
 
-const STATE_TEXT = { loading: "loading", ready: "ready", failed: "failed" } as const;
-
 export function MapStatus() {
   const { layout, regime, cache } = useMapData();
   if (layout.state === "idle") return null;
@@ -40,25 +38,9 @@ export function MapStatus() {
       </p>
       {regime.kind !== "footprints" && (
         <p className="text-xs">
-          Footprints load when the view touches at most {FOOTPRINT_ROW_GROUP_LIMIT} row groups or{" "}
-          {formatCount(FOOTPRINT_SMALL_VIEW_ROWS)} rows. Zoom in.
+          Zoom in to see footprints. They load when the view touches at most{" "}
+          {FOOTPRINT_ROW_GROUP_LIMIT} row groups or {formatCount(FOOTPRINT_SMALL_VIEW_ROWS)} rows.
         </p>
-      )}
-      {regime.kind === "footprints" && (
-        <ul aria-label="Row groups in view" className="flex flex-col gap-0.5 text-xs tabular-nums">
-          {entries.map(({ chunk, entry }) => (
-            <li key={chunk.key} className="flex justify-between gap-2">
-              <span>
-                {chunk.table}, row group {chunk.index}
-              </span>
-              <span className={entry?.state === "failed" ? "text-destructive" : undefined}>
-                {entry?.state === "ready"
-                  ? `${formatCount(entry.features)} features`
-                  : STATE_TEXT[entry?.state ?? "loading"]}
-              </span>
-            </li>
-          ))}
-        </ul>
       )}
       {failed.length > 0 && (
         <Alert variant="destructive" role="alert">
@@ -80,7 +62,7 @@ export function MapStatus() {
       )}
       {layout.unmapped.map((u) => (
         <p key={u.table} className="text-xs">
-          {u.table} is not on the map: {u.reason}.
+          {u.table} is not on the map, because {u.reason}.
         </p>
       ))}
     </section>

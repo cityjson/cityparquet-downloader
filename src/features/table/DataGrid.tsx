@@ -209,7 +209,7 @@ export function DataGrid({
           </tbody>
         </table>
         {page.state === "ready" && page.rows.length === 0 && (
-          <p className="p-3 text-xs">No features in scope match this selection.</p>
+          <p className="p-3 text-xs">No features match this selection.</p>
         )}
         {page.state === "loading" && page.rows.length === 0 && (
           <p role="status" className="p-3 text-xs">

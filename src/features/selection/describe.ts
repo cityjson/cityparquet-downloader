@@ -22,6 +22,12 @@ const STEPS = {
   counting: "Counting the selection in",
 } as const;
 
+const SCOPE = {
+  table: () => "the whole table",
+  view: (g: string) => `the ${g} in view`,
+  extent: (g: string) => `the ${g} under the area`,
+} as const;
+
 /** What the scope is and what it holds now: one sentence, and whether it is a problem. */
 export function describeScope(
   selection: TableSelection | undefined,
@@ -33,7 +39,7 @@ export function describeScope(
       return { text: selection.reason, problem: false };
     case "too-large":
       return {
-        text: `The scope is ${groups(selection.scope.chunks.length)} with ${formatCount(selection.scope.rows)} rows, about ${formatBytes(selection.readBytes)} to read. The limit is ${formatCount(selection.limit)} rows: draw a smaller area${selection.scope.basis === "extent" ? "" : " or zoom in"}.`,
+        text: `Too many rows to select from: ${groups(selection.scope.chunks.length)} with ${formatCount(selection.scope.rows)} rows, about ${formatBytes(selection.readBytes)} to read. The limit is ${formatCount(selection.limit)} rows. Draw a smaller area${selection.scope.basis === "extent" ? "" : " or zoom in"}.`,
         problem: true,
       };
     case "loading":
@@ -42,10 +48,10 @@ export function describeScope(
         problem: false,
       };
     case "failed":
-      return { text: `The selection failed: ${selection.message}`, problem: true };
+      return { text: `Could not count the selection: ${selection.message}`, problem: true };
     case "ready":
       return {
-        text: `Filtering ${formatCount(featuresInScope(selection, cache))} features in ${groups(selection.scope.chunks.length)}${selection.scope.basis === "table" ? " (the whole table)" : selection.scope.basis === "view" ? " in view" : " under the area"}.`,
+        text: `Selecting from ${formatCount(featuresInScope(selection, cache))} features in ${SCOPE[selection.scope.basis](groups(selection.scope.chunks.length))}.`,
         problem: false,
       };
   }

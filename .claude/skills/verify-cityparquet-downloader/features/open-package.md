@@ -2,8 +2,8 @@
 
 Once DuckDB has started, the page opens the package it was built for and reads only the
 footers of its files. The user sees `Opening <URL>…`, then a `Package` section in the side
-panel, open by default and folded by clicking its heading: the source URL, how its files
-were found, the package extent in WGS 84, its CRS, and a table with one row per object
+panel, open by default and folded by clicking its heading: the source URL, the package
+extent in WGS 84, its CRS, and a table with one row per object
 table giving its rows, row groups, LoDs and number of attributes. A source that cannot be
 opened shows an error that says why.
 
@@ -29,7 +29,7 @@ Preconditions:
 - **Open.** Run `control browser goto`, then `control browser wait --text "is ready" --timeout 90000`.
 - **Progress.** Run `control browser snapshot --path open-package/opening.aria.txt` straight after the wait. It may hold `Opening …` (see Gotchas).
 - **Summary.** Run `control browser wait --role table --name Tables --timeout 120000`. It prints `visible`. Then `control browser text --role table --name Tables` prints a header row and one row per table.
-- **Extent.** Run `control browser text --testid package-extent`. It prints `west, south – east, north` in degrees.
+- **Extent.** Run `control browser text --testid package-extent`. It prints `west, south to east, north` in degrees.
 - **Proof.** Run `control browser snapshot --path open-package/<source>/summary.aria.txt` and `control browser screenshot --path open-package/<source>/summary.png`, with `<source>` naming the package (`delft`, `chuo-ku`, `3dbag`).
 - **CRS.** Run `control browser text --text "CRS:"`. It prints the CRS of the tables, once per distinct CRS.
 - **Second reading.** Compare the page with a source that is not the page:

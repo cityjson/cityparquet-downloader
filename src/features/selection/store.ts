@@ -153,7 +153,7 @@ function plan(): {
     if (unmapped) {
       tables[table.name] = {
         state: "unavailable",
-        reason: `It is not on the map: ${unmapped.reason}.`,
+        reason: `It is not on the map, because ${unmapped.reason}.`,
       };
       continue;
     }

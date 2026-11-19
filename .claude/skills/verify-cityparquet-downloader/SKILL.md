@@ -110,21 +110,22 @@ Prefer roles and visible text. The page's stable handles today:
 
 - heading `CityParquet downloader`, in the region `Side panel`, with the button
   `Dark theme` (or `Light theme`); the button `Hide panel` (or `Show panel`) over the map,
-- role `status`: `Starting DuckDB…`, then `DuckDB v… is ready, with …`,
+- role `status`: `Starting DuckDB…`, then `DuckDB v… is ready.`, whose title lists the
+  loaded extensions (`Extensions: …`),
 - role `status`: `Opening <package URL>…` while the package opens,
-- heading `Package`, the source URL and `Extent (WGS 84, lon/lat): …` (test id
+- heading `Package`, the source URL and `Extent (WGS 84 longitude, latitude): …` (test id
   `package-extent`), then role `table` named `Tables`, one row per object table,
 - role `alert`: `DuckDB did not start: …` or `Could not open the package`,
 - region `Map` (MapLibre's canvas), with the buttons `Zoom in` and `Zoom out` and an
   unnamed group holding the basemap's credit links,
 - heading `View` and the status line with test id `map-status`: `Overview: N row groups,
   M features in view` or `Footprints: N features`, with `, loading k of n row groups`
-  while reads run; in the footprint regime the list `Row groups in view`,
+  while reads run,
 - heading `Legend`, a checkbox `<table> table` per table and `<Type> in <table>` per
   object type,
 - role `dialog` named `Feature attributes` with the table `Attributes` and the button
   `Close`.
-- toolbar `Area` over the map: `Draw area`, `Draw rectangle` (both `aria-pressed`), `Use
+- toolbar `Area` over the map: `Draw polygon`, `Draw rectangle` (both `aria-pressed`), `Use
   current view`, `Clear area`; while drawing, a `status` hint with `Finish` and `Cancel`,
 - heading `Selection`: test id `selection-area` (`Area: drawn, N corners.` or `Area: none.
   …`) and per table a `status` with test id `selection-<table>`: `N of M features

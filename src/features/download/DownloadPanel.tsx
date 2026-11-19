@@ -38,7 +38,7 @@ function progressText(p: DownloadProgress, format: ExportFormat): string {
     case "preparing":
       return "Preparing the selection…";
     case "expanding":
-      return `Completing features: row group ${Math.min(p.done + 1, p.total)} of ${p.total}…`;
+      return `Finding the parts of features, row group ${Math.min(p.done + 1, p.total)} of ${p.total}…`;
     case "reading":
       return p.total === 0
         ? "Reading…"
@@ -63,7 +63,7 @@ function RunState({ run, format }: { run: DownloadRun; format: ExportFormat }) {
     case "done":
       return (
         <p role="status" className="text-xs" data-testid="download-result">
-          Saved {run.name}: {formatBytes(run.bytes)}, {formatCount(run.rows)} objects, in{" "}
+          Saved {run.name}: {formatBytes(run.bytes)}, {formatCount(run.rows)} city objects, in{" "}
           {run.seconds.toFixed(1)} s.
         </p>
       );
@@ -178,7 +178,7 @@ export function DownloadPanel() {
 
       <fieldset className="flex flex-col gap-1.5" disabled={busy}>
         <legend className="mb-1 text-xs">
-          {draft.format === "obj" ? "Level of detail (an OBJ holds one)" : "Levels of detail"}
+          {draft.format === "obj" ? "Level of detail, one per OBJ" : "Levels of detail"}
         </legend>
         {draft.format === "obj" ? (
           <RadioGroup
@@ -234,7 +234,7 @@ export function DownloadPanel() {
               </div>
               <p className="text-xs tabular-nums" data-testid={`download-${t.name}`}>
                 {r
-                  ? `${formatCount(s?.state === "ready" ? s.count : 0)} selected features, whole; ${r.lods.length === 0 ? "no geometry" : `LoD ${r.lods.join(", ")}`}; ${r.attributes.length} attributes.`
+                  ? `${formatCount(s?.state === "ready" ? s.count : 0)} selected features with all their parts; ${r.lods.length === 0 ? "no geometry" : `LoD ${r.lods.join(", ")}`}; ${r.attributes.length} attributes.`
                   : prepared.skipped.includes(t.name)
                     ? `Left out: it has no LoD ${objLod}.`
                     : "Nothing selected."}
@@ -256,9 +256,9 @@ export function DownloadPanel() {
 
       {request.tables.length > 0 && (
         <p className="text-xs tabular-nums" data-testid="download-estimate">
-          Reads at most {formatBytes(estimate.readBytes)} from {formatCount(estimate.rowGroups)} row{" "}
-          {estimate.rowGroups === 1 ? "group" : "groups"}; keeps about{" "}
-          {formatBytes(estimate.keptBytes)}.
+          Reads up to {formatBytes(estimate.readBytes)} from {formatCount(estimate.rowGroups)} row{" "}
+          {estimate.rowGroups === 1 ? "group" : "groups"}. The selection is about{" "}
+          {formatBytes(estimate.keptBytes)} of that.
         </p>
       )}
       {prepared.problem && !busy && (
