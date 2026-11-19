@@ -92,6 +92,9 @@ page, and disconnects. The page keeps its state between calls.
 | `control browser wheel --x … --y … --dy -300` | Scrolls there: negative zooms the map in |
 | `control browser map-view` | Prints the map's zoom, centre and bounds |
 | `control browser map-at --lon 4.357 --lat 52.011` | Prints the page pixel of a point, for `click`, `hover` and `wheel` |
+| `control browser map-feature --id <id>` | Prints a page pixel inside that feature's drawn footprint |
+| `control browser drag --x … --y … --to-x … --to-y … [--steps 10]` | Presses, moves and releases the mouse, such as a rectangle on the map |
+| `control browser select --role combobox --name "…" --value …` | Chooses an option of a select by its value |
 | `control browser fill --role textbox --name "…" --value "…"` | Types into a field |
 | `control browser press --key Enter` | Presses a key |
 | `control browser wait --text "…" [--timeout ms]` | Waits until it is visible |
@@ -119,6 +122,21 @@ Prefer roles and visible text. The page's stable handles today:
   object type,
 - role `dialog` named `Feature attributes` with the table `Attributes` and the button
   `Close`.
+- toolbar `Area` over the map: `Draw area`, `Draw rectangle` (both `aria-pressed`), `Use
+  current view`, `Clear area`; while drawing, a `status` hint with `Finish` and `Cancel`,
+- heading `Selection`: test id `selection-area` (`Area: drawn, N corners.` or `Area: none.
+  …`) and per table a `status` with test id `selection-<table>`: `N of M features
+  selected, about X to download.`,
+- region `Feature table` below the map: heading `Features`, the separator `Resize the
+  table`, the tab list `Tables` with one tab per table, `Hide table` (or `Show table`);
+  per tab the test id `table-scope`, the button `Columns` (`Columns N of M`), the region
+  `Filter <table>` and the grid: header buttons `Sort by <column>`, one `row` per feature
+  named from its id, and the navigation `Pages` with `Rows per page`, test id
+  `page-range` (`1–20 of N`), `Previous page` and `Next page`,
+- in the filter bar: `Add condition`, per row `Column of condition N` (a popup with the
+  textbox `Search columns` and the listbox `Columns`), `Operator of condition N`, `Value
+  of condition N`, `Second value of condition N`, `Remove condition N`; then `Match`,
+  `Apply filter`, `Clear filter`, `SQL` and, under it, test id `filter-sql` and `Copy SQL`.
 
 `map-view` and `map-at` read `window.__map`, and `eval --js "window.__mapLogs"` reads
 how long each tile query and footprint read took; both exist in the dev server only.

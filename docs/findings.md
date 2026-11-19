@@ -190,6 +190,57 @@ been seen working, for want of a key.
   Bbox rectangles are filled at a quarter of a footprint's opacity, and a click means a
   footprint before a rectangle and the smaller of two rectangles.
 
+## Selection on 3DBAG
+
+Measured with the verification skill (page timings from a `MutationObserver` on the
+summary, bytes from its recorder) and with `tests/browser/remote/selection.test.ts`. The
+area is the fixture tests' pentagon, about 250 by 250 metres of central Delft; its box
+overlaps row groups 70, 71 and 96.
+
+### The polygon test
+
+The exact test runs on the footprints the map already holds: `ST_Intersects` of each
+EPSG:3857 footprint with the drawn ring, which is straight in Web Mercator as drawn. The
+alternative is the same test in the package CRS, on the footprint geometry read again.
+
+| Over 3 row groups, 98,253 footprints | Time | Read |
+| --- | --- | --- |
+| Exact test in EPSG:3857 on the loaded footprints (count and `selection_rows`) | 146 ms (remote test); about 250 ms from Enter to the count on the page, after the 100 ms debounce | nothing |
+| The same test in the package CRS, geometry read again (remote test) | 2.3 s | 3 row groups of `geometry_lod0_0` |
+| An earlier probe, a 1.5 km pentagon over the same row groups | 82 ms against 2.8 to 4.7 s per row group read again | |
+
+Threshold applied: keep the polygon if, once the footprints are loaded, the exact test
+costs under one second and reads no extra geometry. It costs 0.15 s and reads nothing, so
+the polygon stays; rectangles are not a fallback. Both tests select 198 footprints, and
+native DuckDB on the fixture (`scripts/expect-selection.py`) selects the same 198.
+
+### Filters
+
+A filter's columns are read for the scope's row groups only, by `file_row_number`, into
+one local table per row group, and kept while the map keeps the row group.
+
+| Step | Time | Read |
+| --- | --- | --- |
+| `oorspronkelijkbouwjaar` for 3 row groups | 1.0 to 1.2 s each (remote test) | 3 GETs, 64 kB in all |
+| `b3_pw_bron` for 3 row groups | 2.3 s on the page | 3 GETs, 23 kB |
+| A column the grid had already read (`b3_dak_type`) | 250 ms from Apply to the count | nothing |
+| Count after the columns are local | 66 to 180 ms | nothing |
+
+Within the area, `oorspronkelijkbouwjaar < 1950` selects 123, and with
+`OR b3_pw_bron contains hn4` 124; native DuckDB on the fixture gives the same.
+
+### Limits
+
+- A scope over 400,000 rows (`SELECTION_ROW_LIMIT`, six row groups of 3DBAG) is refused
+  with what looking at it would read. From the fitted view: 285 row groups, 18.7 million
+  rows, about 675 MB. Each row group's footprints cost 2.4 to 3.0 s and about 5 MB to
+  load, one after another, so six take about 20 s; the limit keeps a selection to what
+  the map could draw.
+- Without an area the scope is the row groups in view, whole: zoomed to central Delft
+  that is 4 row groups, 131,009 features, although the view shows far fewer.
+- A value box with a `list` attribute (the datalist of a text column's values) has the
+  role `combobox`, not `textbox`.
+
 ## Other facts later phases need
 
 - `Engine.query` returns plain JSON. A BLOB (an MVT tile, a WKB geometry) comes back as an

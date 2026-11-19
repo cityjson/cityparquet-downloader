@@ -90,22 +90,41 @@ Measurements on 3DBAG are in [findings.md](findings.md).
 
 ### Selection
 
-One predicate, with two parts joined by AND. It drives the map highlight, the table and
-the download.
+A table's selection is a scope and a predicate (`compileSelection`). It drives the map
+highlight, the table and the download. Its rows are the rows the map draws: those with a
+LoD 0 footprint, or, in a table without one, a `bbox`.
 
-- Extent: the user draws a polygon. It is densified, transformed to the package CRS,
-  and applied as a `bbox` overlap test on its bounding box (so statistics prune row
-  groups), then an exact intersection with the footprint. If the exact test is too slow
-  in wasm, selection falls back to rectangles.
-- Attribute filter: a filter bar over the table. Column, an operator that suits the
-  column type, a value; conditions joined by AND or OR. It compiles to a SQL `WHERE`
-  clause, which is shown. A filter belongs to one table.
-- The app shows the number of selected features and an estimate of the bytes to read.
+- Scope: the row groups the selection can hold. With an area, those whose WGS 84 outline
+  overlaps the area's box. Without one, the whole table when it has at most 400,000 rows
+  (`SELECTION_ROW_LIMIT`), else the row groups in view, and nothing while the map shows
+  only row-group outlines. A scope over the limit is refused, with what reading it would
+  cost. The scope's row groups stay loaded in the map's cache while it is selected.
+- Area: a polygon (click the corners; double-click or Enter finishes, Escape cancels), a
+  rectangle dragged on the map, or the current view. Its edges are straight in Web
+  Mercator, as drawn, so the exact test is `ST_Intersects` with the footprints the map
+  holds in EPSG:3857, and its vertices bound its box in WGS 84. No geometry is read again.
+- Attribute filter: a filter bar over each table. A column, an operator its type allows
+  (`kindOf`, `operatorsFor`), a value; conditions joined by AND or OR. A draft is edited
+  and applied with Apply; the applied filter is shown as the SQL `WHERE` clause it
+  compiles to. Text comparisons that match part of a value ignore case (`ILIKE`, with
+  `%`, `_` and `\` escaped); "not equal" keeps nulls (`IS DISTINCT FROM`). A filter's
+  columns are read for the scope's row groups by `file_row_number` into a local table per
+  row group (`scope_attrs_<id>`), joined to the footprints on `__row`.
+- Object types hidden in the legend are left out.
+- Evaluated, the selection is written to `selection_rows (tbl, file, row)`: `file` is the
+  position in the table's `files`, `row` the `file_row_number`. Tiles carry `sel` from a
+  join on it, and the map dims what is not selected. The side panel shows, per table, the
+  count and an estimate of the compressed bytes a full download reads (`estimateBytes`:
+  the scope's row-group bytes in proportion to the rows selected).
 
 ### Table
 
-A paginated grid of the features in view or selected, one tab per object table, with
-column show and hide and sorting.
+A drawer below the map, with a handle to resize it, one tab per object table. Each tab
+has the table's filter bar and a grid of its selection a page at a time (20, 50 or 100
+rows), with the total. The grid reads only the columns shown (chosen in a columns panel,
+by default `id`, `object_type` and the first eight attributes), and sorts on the engine,
+nulls last. Each header shows the column's type. A row click marks its footprint and
+brings it into view; a footprint click marks its row when it is on the page.
 
 ### Download
 
@@ -121,7 +140,7 @@ column show and hide and sorting.
 
 - The CRS comes from the `city` footer. For a compound CRS the horizontal part is used.
 - Display: package CRS to WGS 84 and Web Mercator with `ST_Transform` (`spatial`).
-- Selection: the drawn WGS 84 polygon is densified before it is transformed.
+- Selection: the drawn area is tested in Web Mercator, where its edges are straight.
 - No CRS, or an unknown one: the app asks for an EPSG code. It never guesses.
 
 ### Out of scope

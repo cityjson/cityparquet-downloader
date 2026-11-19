@@ -44,5 +44,8 @@ handles, required state, commands and observable proof.
 - [Footprints](./footprints.md) covers reading and drawing footprints when zoomed in, their cache, and the bbox fallback.
 - [Legend](./legend.md) covers the object types on the map, their colours and hiding them.
 - [Attribute popup](./attribute-popup.md) covers hovering and clicking a footprint to read its attributes.
+- [Area selection](./extent-selection.md) covers drawing a polygon or rectangle or taking the view, the highlight and the selection summary.
+- [Filter](./filter.md) covers a table's filter bar: conditions, and or or, apply and clear, and the SQL.
+- [Feature table](./table.md) covers the drawer: tabs, pages, sorting, columns, and rows linked to footprints.
 
 Each new user-facing feature adds a file here in the same change that adds the feature.

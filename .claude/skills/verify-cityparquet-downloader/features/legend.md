@@ -12,6 +12,7 @@ types show once footprints load. Types stay listed once seen.
 - `legend-types` lists the object types of loaded footprints per table with a colour and a count.
 - `legend-hide-type` hides one type on the map, and shows it again.
 - `legend-hide-table` hides a whole table on the map, and disables its type checkboxes.
+- `legend-selection` leaves a hidden type out of the selection: its count and its grid.
 - `legend-empty` says `Its object types show once footprints load.` before any load.
 
 ## How to get to it (user POV)
@@ -29,11 +30,12 @@ Preconditions:
 - **Hide a type.** `control browser click --role checkbox --name "Building in building"`. The same eval prints `0`, and screenshot `legend/<source>/hidden.png` shows the basemap with outlines and no footprints. Click it again: the count returns.
 - **Hide a table.** `control browser click --role checkbox --name "building table"`: the footprints go, and `Building in building` is disabled. Click it again.
 - **Several tables.** On `chuo-ku`: the checkboxes `building table` and `bridge table`, with `Building in building` and `Bridge in bridge`, `BridgeConstructiveElement in bridge`, `BridgeInstallation in bridge`. Hiding `bridge table` leaves the buildings.
+- **Selection.** On `chuo-ku` with the area of [extent-selection.md](./extent-selection.md)'s Chuo-ku triangle `(139.7850, 35.6800)`, `(139.7880, 35.6802)`, `(139.7862, 35.6830)`: `control browser text --testid selection-bridge` reads `23 of …`. Uncheck `Bridge in bridge`: `22 of …`, and the bridge tab's grid has no `Bridge` row. Check it again: `23 of …`.
 - **Empty.** On `3dbag` before zooming in: `control browser text --text "Its object types show once footprints load."` prints it.
 - **Proof.** Snapshot `legend/<source>/legend.aria.txt` before and after a toggle: the checkbox's `checked` state changes.
 
 ## Gotchas
 
 - A checkbox's accessible name is fixed (`<Type> in <table>`, `<table> table`); the count beside it is not part of it.
-- A hidden type is hidden for footprints loaded later too.
+- A hidden type is hidden for footprints loaded later too, and left out of the selection and the download.
 - The rendered-feature count counts a footprint once per tile it crosses, so it can exceed the status count. Compare it with zero, not with the status.
