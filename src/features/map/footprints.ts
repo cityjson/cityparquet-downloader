@@ -102,7 +102,10 @@ export async function placePackage(info: PackageInfo): Promise<void> {
       for (const s of createFeaturesSql) await engine.exec(s);
       for (const table of info.tables) {
         if (table.crs.kind !== "known") {
-          unmapped.push({ table: table.name, reason: `its CRS is ${table.crs.kind}` });
+          unmapped.push({
+            table: table.name,
+            reason: table.crs.kind === "none" ? "it has no CRS" : "its CRS is unknown",
+          });
           continue;
         }
         const own = chunksOf(table);

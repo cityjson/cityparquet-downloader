@@ -4,11 +4,11 @@ const integer = new Intl.NumberFormat("en-GB");
 
 export const formatCount = (n: number) => integer.format(n);
 
-/** `west, south – east, north`, in degrees. */
+/** `west, south to east, north`, in degrees. */
 export function formatExtent(box: Box | null): string {
   if (!box) return "unknown";
   const d = (v: number) => v.toFixed(4);
-  return `${d(box.xmin)}, ${d(box.ymin)} – ${d(box.xmax)}, ${d(box.ymax)}`;
+  return `${d(box.xmin)}, ${d(box.ymin)} to ${d(box.xmax)}, ${d(box.ymax)}`;
 }
 
 export function formatCrs(crs: Crs): string {

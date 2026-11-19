@@ -91,8 +91,8 @@ export async function resolveSource(spec: SourceSpec, fetch: Fetch): Promise<Res
       const probed = await probe(spec.url, fetch);
       if (probed.length === 0) {
         throw new SourceError(
-          `no CityParquet files at ${spec.url}: no metadata.json naming them, and none of ` +
-            `${OBJECT_TABLES.map((t) => `${t}.parquet`).join(", ")}`,
+          `No CityParquet files at ${spec.url}. There is no metadata.json naming them, and ` +
+            "none of the file names the specification fixes, such as building.parquet.",
         );
       }
       return { spec, listedBy: "probe", ...group(probed) };
@@ -102,8 +102,8 @@ export async function resolveSource(spec: SourceSpec, fetch: Fetch): Promise<Res
       const listed = (await listMetadata(spec.base, fetch)).filter((f) => pattern.test(f));
       if (listed.length === 0) {
         throw new SourceError(
-          `cannot expand ${spec.url}: plain HTTP cannot list files, and no ` +
-            `${spec.base}metadata.json names a file that matches`,
+          `Cannot expand ${spec.url}. Plain HTTP cannot list files, and no ` +
+            `${spec.base}metadata.json names a file that matches.`,
         );
       }
       return { spec, listedBy: "metadata", ...group(listed) };

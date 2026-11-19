@@ -10,12 +10,6 @@ import {
 import { formatCount, formatCrs, formatExtent } from "./format";
 import { usePackage } from "./store";
 
-const LISTED_BY = {
-  metadata: "files from metadata.json",
-  probe: "files found by name",
-  url: "a single file",
-} as const;
-
 /** The open package, compact enough for the side panel; it folds away. */
 export function PackageSummary() {
   const pkg = usePackage();
@@ -28,8 +22,9 @@ export function PackageSummary() {
       return (
         <Alert variant="destructive" role="alert">
           <AlertTitle>Could not open the package</AlertTitle>
-          <AlertDescription className="break-all">
-            {pkg.url}: {pkg.message}
+          <AlertDescription className="flex flex-col gap-1">
+            <span className="break-all">{pkg.url}</span>
+            <span className="break-words">{pkg.message}</span>
           </AlertDescription>
         </Alert>
       );
@@ -43,10 +38,10 @@ export function PackageSummary() {
           </summary>
           <div className="mt-2 flex flex-col gap-2 text-xs">
             <p className="break-all">
-              <a href={pkg.url}>{pkg.url}</a>, {LISTED_BY[info.source.listedBy]}.
+              <a href={pkg.url}>{pkg.url}</a>
             </p>
             <p>
-              Extent (WGS 84, lon/lat):{" "}
+              Extent (WGS 84 longitude, latitude):{" "}
               <span data-testid="package-extent" className="tabular-nums">
                 {formatExtent(info.extentWgs84)}
               </span>
@@ -55,31 +50,29 @@ export function PackageSummary() {
             <Table aria-label="Tables" className="text-xs">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="h-7 px-1">Table</TableHead>
-                  <TableHead className="h-7 px-1 text-right">Rows</TableHead>
-                  <TableHead className="h-7 px-1 text-right" title="Row groups">
-                    Groups
+                  <TableHead className="h-7 px-0.5">Table</TableHead>
+                  <TableHead className="h-7 px-0.5 text-right">Rows</TableHead>
+                  <TableHead className="h-auto px-0.5 py-1 text-right whitespace-normal">
+                    Row groups
                   </TableHead>
-                  <TableHead className="h-7 px-1">LoDs</TableHead>
-                  <TableHead className="h-7 px-1 text-right" title="Attributes">
-                    Attrs
-                  </TableHead>
+                  <TableHead className="h-7 px-0.5">LoDs</TableHead>
+                  <TableHead className="h-7 px-0.5 text-right">Attributes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {info.tables.map((t) => (
                   <TableRow key={t.name}>
-                    <TableCell className="px-1 font-medium text-foreground">{t.name}</TableCell>
-                    <TableCell className="px-1 text-right tabular-nums">
+                    <TableCell className="px-0.5 font-medium text-foreground">{t.name}</TableCell>
+                    <TableCell className="px-0.5 text-right tabular-nums">
                       {formatCount(t.rowCount)}
                     </TableCell>
-                    <TableCell className="px-1 text-right tabular-nums">
+                    <TableCell className="px-0.5 text-right tabular-nums">
                       {formatCount(t.rowGroups.length)}
                     </TableCell>
-                    <TableCell className="px-1 whitespace-normal">
+                    <TableCell className="px-0.5 whitespace-normal">
                       {t.lods.join(", ") || "none"}
                     </TableCell>
-                    <TableCell className="px-1 text-right tabular-nums">
+                    <TableCell className="px-0.5 text-right tabular-nums">
                       {t.attributes.length}
                     </TableCell>
                   </TableRow>

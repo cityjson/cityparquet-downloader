@@ -30,7 +30,7 @@ Preconditions:
 
 - **Add.** `control browser click --role button --name "Add condition"`; `control browser click --role button --name "Column of condition 1"`; `control browser fill --role textbox --name "Search columns" --value oorspronkelijkbouwjaar`; `control browser press --key Enter`.
 - **Operator and value.** `control browser select --role combobox --name "Operator of condition 1" --value lt`; `control browser fill --label "Value of condition 1" --value 1950`.
-- **Apply.** `control browser click --role button --name "Apply filter"`. The bar reads `Filter applied: 1 condition.`; with the Delft area drawn ([extent-selection.md](./extent-selection.md)), `selection-building` reads `123 of …` (fixture and 3DBAG).
+- **Apply.** `control browser click --role button --name "Apply filter"`. The bar reads `Filter applied: 1 condition.`; with the Delft area drawn ([extent-selection.md](./extent-selection.md)), `selection-building` reads `123 of …` on the fixture, and one or two fewer on 3DBAG when its area holds 197.
 - **Or.** Add a second condition `b3_pw_bron` `contains` `hn4`, then `control browser select --role combobox --name Match --value or` and apply: `124 of …`.
 - **SQL.** `control browser click --role button --name SQL`; `control browser text --testid filter-sql` prints `WHERE ("oorspronkelijkbouwjaar" < 1950) OR ("b3_pw_bron" ILIKE '%hn4%' ESCAPE '\')`.
 - **Values.** Click into `Value of condition N` of a `b3_dak_type` condition: `control browser eval --js "[...document.querySelectorAll('datalist option')].map(o => o.value)"` lists `slanted`, `horizontal`, `multiple horizontal`, `unknown` on Delft.

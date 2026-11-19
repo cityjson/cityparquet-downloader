@@ -1,14 +1,14 @@
 # cityparquet-downloader
 
-A web application for downloading any area of a
-[CityParquet](https://github.com/cityjson/cityparquet) package as CityParquet. It runs
-entirely in the browser: DuckDB (through duckdb-wasm) reads the package in place over HTTP
-and writes the selected part, so no server is needed.
+A web page that opens a [CityParquet](https://github.com/cityjson/cityparquet) package
+and downloads a part of it. It runs in the browser. DuckDB, through duckdb-wasm, reads the
+package in place over HTTP and writes the selected part, so no server is needed.
 
-It is not tied to one dataset. Any CityParquet package can be the source. A selection,
-drawn on the map, filtered by attributes or both, downloads as a CityParquet package,
-CityJSON, CityJSONSeq, FlatCityBuf or OBJ, with the levels of detail and attributes
-chosen, each feature whole. The `cityjson` extension writes every format.
+Any CityParquet package can be the source. The user selects features by drawing an area
+on the map, by filtering attributes, or both. The selection downloads as a CityParquet
+package, CityJSON, CityJSONSeq, FlatCityBuf or OBJ, with the chosen levels of detail and
+attributes. A selected building comes with all its parts. The `cityjson` extension writes
+every format.
 
 ## Stack
 
@@ -21,16 +21,20 @@ chosen, each feature whole. The `cityjson` extension writes every format.
   community builds for the embedded DuckDB version, with the core `parquet` and
   `spatial` extensions.
 
-The `@duckdb/duckdb-wasm` version is pinned exactly: the extensions are built per DuckDB
+The `@duckdb/duckdb-wasm` version is pinned exactly. The extensions are built per DuckDB
 version, so the pin decides which extension builds are loaded.
 
 ## Source
 
 The package is the build-time variable `VITE_CITYPARQUET_URL`, by default
-`https://cityparquet.open3d.city/data/3dbag/`. It can be a package directory (its
-`metadata.json` names the files; without one the specification's file names are tried),
-a single `.parquet` file, or a wildcard such as `…/**/building.parquet` that
-`metadata.json` expands. A relative URL resolves against the page, so
+`https://cityparquet.open3d.city/data/3dbag/`. It can be one of three things:
+
+- a package directory, whose `metadata.json` names the files; without one, the app tries
+  the file names the specification fixes,
+- a single `.parquet` file,
+- a wildcard such as `…/**/building.parquet`, which `metadata.json` expands.
+
+A relative URL resolves against the page, so
 `VITE_CITYPARQUET_URL=/fixtures/delft/ just dev` opens the bundled fixture.
 
 The basemap is OpenFreeMap's, which needs no key. With `VITE_CARTO_KEY` set at build time
@@ -42,7 +46,7 @@ it is CARTO's Positron and Dark Matter instead.
 
 ```sh
 just install        # dependencies
-just dev            # dev server → http://localhost:5173/
+just dev            # dev server on http://localhost:5173/
 just check          # format, lint, type check
 just test           # unit tests
 just test-browser   # browser tests against fixtures/
@@ -58,8 +62,8 @@ They fetch the DuckDB extensions from their hosts; the data comes from `fixtures
 
 The app is static files, served by Cloudflare Workers as static assets (`wrangler.jsonc`,
 worker `cityparquet-downloader`). Workers serve at most 25 MiB per file and the engine's
-`duckdb-base.wasm` is 33.7 MB, so `just build-deploy` builds with `VITE_DUCKDB_CDN=1`:
-the wasm is fetched from jsDelivr at the installed duckdb-wasm version, and
+`duckdb-base.wasm` is 33.7 MB, so `just build-deploy` builds with `VITE_DUCKDB_CDN=1`.
+That build fetches the wasm from jsDelivr at the installed duckdb-wasm version, and
 `scripts/check-asset-sizes.mjs` fails the build if any file in `dist/` is over 25 MiB.
 The engine is single-threaded, so the site needs no COOP or COEP headers.
 

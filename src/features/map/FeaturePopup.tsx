@@ -32,7 +32,7 @@ export function FeaturePopup() {
             {feature.id}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {feature.objectType} in {feature.table}, row {feature.row}
+            {feature.objectType} in the {feature.table} table
           </p>
         </div>
         <Button size="xs" variant="outline" onClick={closePopup}>

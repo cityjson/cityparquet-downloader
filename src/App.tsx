@@ -20,8 +20,8 @@ function EngineStatus() {
       return <p role="status">Starting DuckDB…</p>;
     case "ready":
       return (
-        <p role="status" className="text-xs">
-          DuckDB {status.version} is ready, with {status.extensions.join(", ")}.
+        <p role="status" className="text-xs" title={`Extensions: ${status.extensions.join(", ")}`}>
+          DuckDB {status.version} is ready.
         </p>
       );
     case "failed":

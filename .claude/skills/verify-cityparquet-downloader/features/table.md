@@ -29,7 +29,7 @@ Preconditions:
 
 - The table's selection is counted (see [extent-selection.md](./extent-selection.md)); on 3DBAG, zoom in until footprints show.
 
-- **Rows.** On `delft` after a fresh load: `control browser text --testid page-range` prints `1–20 of 373`, and `control browser text --testid table-scope` reads `Filtering 373 features in 9 row groups (the whole table).`
+- **Rows.** On `delft` after a fresh load: `control browser text --testid page-range` prints `1–20 of 373`, and `control browser text --testid table-scope` reads `Selecting from 373 features in the whole table.`
 - **Page.** `control browser click --role button --name "Next page"`: `21–40 of 373`. `control browser select --role combobox --name "Rows per page" --value 50`: `1–50 of 373`.
 - **Sort.** `control browser click --role button --name "Sort by b3_h_dak_50p"` twice: the header's `aria-sort` is `descending` and the column reads `22.50…`, `18.98…`, `16.43…` on Delft.
 - **Columns.** `control browser click --role button --name Columns`; `control browser click --role checkbox --name "Show b3_dak_type"`: the column goes from the grid, and the button reads `Columns 9 of …`. `Default columns` restores them.

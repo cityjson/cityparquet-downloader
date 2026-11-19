@@ -14,7 +14,7 @@ import { useSelection } from "./store";
 
 const HINTS = {
   polygon:
-    "Click to add corners. Double-click or press Enter to finish, Backspace removes the last corner, Escape cancels.",
+    "Click to add corners. Double-click or press Enter to finish. Backspace removes the last corner. Escape cancels.",
   rectangle: "Drag on the map to draw a rectangle. Escape cancels.",
 } as const;
 
@@ -37,7 +37,7 @@ export function AreaTools() {
           aria-pressed={mode === "polygon"}
           onClick={() => (mode === "polygon" ? cancelDrawing() : startDrawing("polygon"))}
         >
-          Draw area
+          Draw polygon
         </Button>
         <Button
           size="xs"
