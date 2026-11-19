@@ -138,6 +138,18 @@ report["missing"] = sorted(expected - got)[:5]
 report["extra"] = sorted(got - expected)[:5]
 report["lods"] = sorted(c[len("geometry_lod") :].replace("_", ".") for c in columns if c.startswith("geometry_lod"))
 report["attributes"] = sorted(c for c in columns if c in source_attributes)
+# CityJSON leaves out a null attribute, and its readers type the columns from the values
+# present, so an attribute null in every downloaded object has no column there.
+if file.suffix in (".json", ".jsonl"):
+    attributes = [
+        a
+        for a in attributes
+        if con.execute(
+            f"""SELECT count("{a}") FROM rows WHERE feature_id IN (
+              SELECT feature_id FROM rows WHERE drawn AND hit AND ({args.where}))"""
+        ).fetchone()[0]
+        > 0
+    ]
 checks = {
     "ids": got == expected,
     "featuresAddParts": len(expected) > len(seeds),
