@@ -35,7 +35,7 @@ Preconditions:
 - **View.** `control browser click --role button --name "Use current view"`.
 - **Cancel.** During a polygon, `control browser press --key Escape`: the hint goes and the area is unchanged.
 - **Clear.** `control browser click --role button --name "Clear area"`: `selection-area` reads `Area: none. …`.
-- **Too large.** On 3DBAG at the fitted view, `control browser text --testid table-scope` reads `Too many rows to select from: 285 row groups with 18,671,938 rows, about 675 MB to read. The limit is 400,000 rows. …` (role `alert`).
+- **Too large.** On 3DBAG at the fitted view, `control browser text --testid table-scope` reads `Too many rows to select from: 329 row groups with 21,555,522 rows, about 790 MB to read. The limit is 400,000 rows. …` (role `alert`).
 - **Proof.** An independent count: `scripts/expect-selection.py` computes the fixture's answers in native DuckDB (`tests/browser/selection.expected.json`, case `delft area`).
 
 ## Gotchas

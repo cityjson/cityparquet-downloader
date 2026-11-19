@@ -168,6 +168,9 @@ export function MapView() {
     if (!map || !info) return;
     const e = info.extentWgs84;
     if (e) {
+      // The feature table opens below the map in the same render: size the map to its
+      // container first, or the fit is for the full window and the drawer cuts it off.
+      map.resize();
       map.fitBounds(
         [
           [e.xmin, e.ymin],
