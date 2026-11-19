@@ -3,7 +3,8 @@
 // Chromium per run, both started here and only ever stopped by pid.
 //
 //   control.mjs launch [--source <package URL>] | doctor | cleanup
-//   control.mjs browser <goto|click|hover|fill|press|wait|text|snapshot|screenshot|eval> [--flags]
+//   control.mjs browser <goto|click|hover|drag|wheel|fill|select|press|wait|text|snapshot|
+//                        screenshot|eval|map-view|map-at> [--flags]
 //   control.mjs network <mark|summary> [--host <name>]
 //
 // Every command takes --run <name> (default "default"); runs with different names can
@@ -269,6 +270,21 @@ async function browser() {
         if (flags.x !== undefined) await page.mouse.move(Number(flags.x), Number(flags.y));
         else await target().hover({ timeout });
         break;
+      case "drag": {
+        // Presses at --x --y, moves to --to-x --to-y in --steps moves, releases: a pan, or a
+        // rectangle while the rectangle tool is on.
+        await page.mouse.move(Number(flags.x), Number(flags.y));
+        await page.mouse.down();
+        await page.mouse.move(Number(flags["to-x"]), Number(flags["to-y"]), {
+          steps: Number(flags.steps ?? 10),
+        });
+        await page.mouse.up();
+        break;
+      }
+      case "select":
+        // Chooses an option of a native select by its value or its visible label.
+        console.log((await target().selectOption(flags.value ?? "", { timeout })).join(", "));
+        break;
       case "wheel":
         // Scrolls at a point: negative --dy zooms the map in there, positive out.
         await page.mouse.move(Number(flags.x), Number(flags.y));
@@ -337,6 +353,34 @@ async function browser() {
               [Number(flags.lon), Number(flags.lat)],
             )
           ).join(" "),
+        );
+        break;
+      // `map-feature --id <id>` prints the page pixel of a point inside that drawn footprint
+      // (the one picked there, not hidden under another), for `click`; null when not drawn.
+      case "map-feature":
+        console.log(
+          await page.evaluate((id) => {
+            const m = window.__map;
+            const r = m.getContainer().getBoundingClientRect();
+            const layers = ["footprints-fill"];
+            for (const f of m.queryRenderedFeatures({ layers })) {
+              if (f.properties.id !== id) continue;
+              const ring =
+                (f.geometry.type === "Polygon"
+                  ? f.geometry.coordinates
+                  : f.geometry.coordinates[0])?.[0] ?? [];
+              const xs = ring.map((p) => p[0]);
+              const ys = ring.map((p) => p[1]);
+              const p = m.project([
+                (Math.min(...xs) + Math.max(...xs)) / 2,
+                (Math.min(...ys) + Math.max(...ys)) / 2,
+              ]);
+              const top = m.queryRenderedFeatures([p.x, p.y], { layers })[0];
+              if (top?.properties.id === id)
+                return `${Math.round(r.left + p.x)} ${Math.round(r.top + p.y)}`;
+            }
+            return null;
+          }, flags.id),
         );
         break;
       default:

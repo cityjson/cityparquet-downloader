@@ -24,6 +24,12 @@ import type { Url } from "./url";
  */
 export const FEATURES_TABLE = "map_features";
 
+/**
+ * One row per selected feature of every table, `tbl, file, row` as in `map_features`. The
+ * selection writes it (selection.ts); the highlight and the download read it.
+ */
+export const SELECTION_TABLE = "selection_rows";
+
 /** The vector tile layer that holds the footprints. */
 export const TILE_LAYER = "features";
 
@@ -33,6 +39,7 @@ export const createFeaturesSql: readonly Sql[] = [
   chunk INTEGER, uid BIGINT, tbl VARCHAR, file INTEGER, "row" BIGINT,
   id VARCHAR, feature_id VARCHAR, object_type VARCHAR,
   xmin DOUBLE, ymin DOUBLE, xmax DOUBLE, ymax DOUBLE, geom GEOMETRY)`,
+  sql`CREATE TABLE IF NOT EXISTS ${ident(SELECTION_TABLE)} (tbl VARCHAR, file INTEGER, "row" BIGINT)`,
 ];
 
 /** What a table's footprints are drawn from. */
@@ -82,20 +89,37 @@ WHERE chunk = ${num(id)} GROUP BY ALL ORDER BY ALL`;
 export const evictChunkSql = (id: number): Sql =>
   sql`DELETE FROM ${ident(FEATURES_TABLE)} WHERE chunk = ${num(id)}`;
 
+export interface TileOptions {
+  /** Each feature also carries `sel`, 1 when its row is in `selection_rows`, else 0. */
+  highlight?: boolean;
+  extent?: number;
+  buffer?: number;
+}
+
 /**
  * One row, `tile`: the vector tile `z/x/y` of every footprint that reaches into it (with
- * the buffer), as `ST_AsMVT` makes it: a layer with no features when there is none. Each feature carries
- * `uid`, `tbl`, `file`, `row`, `id` and `object_type`.
+ * the buffer), as `ST_AsMVT` makes it: a layer with no features when there is none. Each
+ * feature carries `uid`, `tbl`, `file`, `row`, `id` and `object_type`, and `sel` with
+ * `highlight`.
  */
-export function tileSql(tile: TileId, extent = 4096, buffer = 64): Sql {
+export function tileSql(
+  tile: TileId,
+  { highlight = false, extent = 4096, buffer = 64 }: TileOptions = {},
+): Sql {
   const e = tileEnvelope(tile);
   const pad = ((e.xmax - e.xmin) * buffer) / extent;
   const box = sql`ST_Extent(ST_MakeEnvelope(${num(e.xmin)}, ${num(e.ymin)}, ${num(e.xmax)}, ${num(e.ymax)}))`;
+  const sel = highlight ? sql`, 'sel': sel` : sql``;
+  const from = highlight
+    ? sql`SELECT f.*, (s."row" IS NOT NULL)::INTEGER AS sel
+    FROM ${ident(FEATURES_TABLE)} f LEFT JOIN ${ident(SELECTION_TABLE)} s
+      ON s.tbl = f.tbl AND s.file = f.file AND s."row" = f."row"`
+    : sql`SELECT * FROM ${ident(FEATURES_TABLE)}`;
   return sql`SELECT ST_AsMVT({'uid': uid, 'tbl': tbl, 'file': file, 'row': "row", 'id': id,
-                  'object_type': object_type, 'geom': g}, ${lit(TILE_LAYER)}, ${num(extent)}) AS tile
+                  'object_type': object_type${sel}, 'geom': g}, ${lit(TILE_LAYER)}, ${num(extent)}) AS tile
 FROM (
   SELECT *, ST_AsMVTGeom(geom, ${box}, ${num(extent)}, ${num(buffer)}, true) AS g
-  FROM ${ident(FEATURES_TABLE)}
+  FROM (${from})
   WHERE xmax >= ${num(e.xmin - pad)} AND xmin <= ${num(e.xmax + pad)}
     AND ymax >= ${num(e.ymin - pad)} AND ymin <= ${num(e.ymax + pad)}
 )

@@ -7,7 +7,7 @@ import { closePopup, usePopup } from "./popup";
 
 export function FeaturePopup() {
   const popup = usePopup();
-  const open = popup.state !== "closed";
+  const open = popup.state !== "closed" && popup.state !== "marked";
 
   useEffect(() => {
     if (!open) return;
@@ -18,7 +18,7 @@ export function FeaturePopup() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  if (popup.state === "closed") return null;
+  if (popup.state === "closed" || popup.state === "marked") return null;
   const { feature } = popup;
   return (
     <section

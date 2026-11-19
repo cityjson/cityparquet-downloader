@@ -10,13 +10,26 @@ import { colourOf, TILE_LAYER, TILE_URL } from "@/core";
 import type { Theme } from "@/lib/theme";
 
 /** Source and layer ids, for other features that draw on the map. */
-export const SOURCES = { rowGroups: "row-groups", footprints: "footprints" } as const;
+export const SOURCES = {
+  rowGroups: "row-groups",
+  footprints: "footprints",
+  area: "selection-area",
+  areaDraft: "selection-area-draft",
+} as const;
 export const LAYERS = {
   rowGroupsFill: "row-groups-fill",
   rowGroupsLine: "row-groups-line",
   footprintsFill: "footprints-fill",
   footprintsLine: "footprints-line",
+  areaFill: "selection-area-fill",
+  areaLine: "selection-area-line",
+  areaDraftFill: "selection-area-draft-fill",
+  areaDraftLine: "selection-area-draft-line",
+  areaDraftPoints: "selection-area-draft-points",
 } as const;
+
+/** The drawn area's colour, legible on both basemaps. */
+const AREA = "#2f6fe4";
 
 /**
  * Positron when light and Dark Matter when dark, on OpenStreetMap data. CARTO serves them
@@ -47,8 +60,12 @@ export function basemapStyle(theme: Theme, ratio = 1): string | StyleSpecificati
   };
 }
 
+const EMPTY = { type: "FeatureCollection", features: [] } as const;
+
 export const overlaySources: Record<string, SourceSpecification> = {
-  [SOURCES.rowGroups]: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+  [SOURCES.rowGroups]: { type: "geojson", data: EMPTY },
+  [SOURCES.area]: { type: "geojson", data: EMPTY },
+  [SOURCES.areaDraft]: { type: "geojson", data: EMPTY },
   [SOURCES.footprints]: {
     type: "vector",
     tiles: [TILE_URL],
@@ -114,11 +131,60 @@ export function overlayLayers(theme: Theme): LayerSpecification[] {
           2.5,
           ["boolean", ["feature-state", "hover"], false],
           2,
+          ["==", ["get", "sel"], 1],
+          1.2,
           0.6,
         ],
+        "line-opacity": dimmed(0.3),
+      },
+    },
+    {
+      id: LAYERS.areaFill,
+      type: "fill",
+      source: SOURCES.area,
+      paint: { "fill-color": AREA, "fill-opacity": 0.06 },
+    },
+    {
+      id: LAYERS.areaLine,
+      type: "line",
+      source: SOURCES.area,
+      paint: { "line-color": AREA, "line-width": 2 },
+    },
+    {
+      id: LAYERS.areaDraftFill,
+      type: "fill",
+      source: SOURCES.areaDraft,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: { "fill-color": AREA, "fill-opacity": 0.1 },
+    },
+    {
+      id: LAYERS.areaDraftLine,
+      type: "line",
+      source: SOURCES.areaDraft,
+      filter: ["!=", ["geometry-type"], "Point"],
+      paint: { "line-color": AREA, "line-width": 2, "line-dasharray": [2, 1.5] },
+    },
+    {
+      id: LAYERS.areaDraftPoints,
+      type: "circle",
+      source: SOURCES.areaDraft,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 4,
+        "circle-color": "#ffffff",
+        "circle-stroke-color": AREA,
+        "circle-stroke-width": 2,
       },
     },
   ];
+}
+
+/**
+ * `factor` for a footprint the selection leaves out, 1 otherwise. Tiles carry `sel` only
+ * while a selection is active, so without one nothing is dimmed.
+ */
+function dimmed(factor: number): ExpressionSpecification {
+  return ["case", ["==", ["coalesce", ["get", "sel"], 1], 0], factor, 1];
 }
 
 const OURS = new Set<string>([...Object.values(SOURCES), ...Object.values(LAYERS)]);
@@ -155,8 +221,9 @@ export function colours(types: readonly string[]): ExpressionSpecification | str
 }
 
 /**
- * Fill opacity: stronger for the hovered and the selected feature. A table drawn as bbox
- * rectangles is filled faintly, since one object's box can cover a whole district.
+ * Fill opacity: stronger for the hovered and the selected feature, weaker for one the
+ * selection leaves out. A table drawn as bbox rectangles is filled faintly, since one
+ * object's box can cover a whole district.
  */
 export function fillOpacity(bboxTables: readonly string[]): ExpressionSpecification {
   return [
@@ -170,6 +237,7 @@ export function fillOpacity(bboxTables: readonly string[]): ExpressionSpecificat
       0.85,
       0.55,
     ],
+    dimmed(0.2),
   ];
 }
 

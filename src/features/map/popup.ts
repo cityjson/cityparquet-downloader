@@ -19,6 +19,8 @@ export interface Picked {
 
 export type Popup =
   | { state: "closed" }
+  /** Marked on the map without its attributes panel: chosen in the table, which shows them. */
+  | { state: "marked"; feature: Picked }
   | { state: "loading"; feature: Picked }
   | { state: "ready"; feature: Picked; values: [string, string | null][] }
   | { state: "failed"; feature: Picked; message: string };
@@ -35,6 +37,10 @@ export function pickedFrom(properties: Record<string, unknown> | undefined): Pic
   if (uid === null || file === null || row === null) return null;
   if (typeof p.tbl !== "string" || typeof p.id !== "string") return null;
   return { uid, table: p.tbl, file, row, id: p.id, objectType: String(p.object_type ?? "") };
+}
+
+export function markFeature(feature: Picked): void {
+  usePopup.setState({ state: "marked", feature }, true);
 }
 
 export function closePopup(): void {
