@@ -35,7 +35,7 @@ import {
 } from "@/core";
 import { withEngine } from "@/engine/session";
 import { pinChunks, useMapData } from "@/features/map/footprints";
-import { hiddenIn, useLegend } from "@/features/map/legend";
+import { hiddenIn, useLegend } from "@/features/map/legendStore";
 import { usePackage } from "@/features/source/store";
 import { ensureColumns } from "./attributes";
 
