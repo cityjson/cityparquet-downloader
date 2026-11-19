@@ -21,16 +21,13 @@ import {
   type ChunkKey,
   compileSelection,
   type Extent,
-  estimateBytes,
   type Filter,
-  footprintOf,
   materialiseSql,
   type PackageTable,
   type Scope,
   type ScopeChunk,
   type Selection,
   type SelectionPlan,
-  scopeRowGroups,
   selectionCountSql,
 } from "@/core";
 import { withEngine } from "@/engine/session";
@@ -39,13 +36,11 @@ import { hiddenIn, useLegend } from "@/features/map/legendStore";
 import { usePackage } from "@/features/source/store";
 import { ensureColumns } from "./attributes";
 
-export type ReadyPlan = Extract<SelectionPlan, { kind: "ready" }>;
+export type ReadyPlan = SelectionPlan;
 
 export type TableSelection =
   /** Nothing can be selected now, and why: the table is not on the map, or the view is too wide. */
   | { state: "unavailable"; reason: string }
-  /** The scope holds more rows than the limit; `readBytes` is what looking at it would read. */
-  | { state: "too-large"; selection: Selection; scope: Scope; limit: number; readBytes: number }
   | {
       state: "loading";
       selection: Selection;
@@ -168,27 +163,8 @@ function plan(): {
       hiddenTypes: hiddenIn(table.name, legend),
     };
     const compiled = compileSelection(selection, table, chunks, view);
-    keys.push([selection, compiled.kind, compiled.scope.chunks.map((c) => c.id)]);
-    if (compiled.kind === "too-large") {
-      const footprint = footprintOf(table);
-      const read = [
-        footprint.kind === "lod0" ? footprint.column : "bbox",
-        "id",
-        "feature_id",
-        "object_type",
-      ];
-      tables[table.name] = {
-        state: "too-large",
-        selection,
-        scope: compiled.scope,
-        limit: compiled.limit,
-        readBytes: estimateBytes(
-          scopeRowGroups(table.rowGroups, compiled.scope.chunks),
-          compiled.scope.rows,
-          read,
-        ),
-      };
-    } else if (compiled.scope.basis === "view" && regime.kind !== "footprints") {
+    keys.push([selection, compiled.scope.chunks.map((c) => c.id)]);
+    if (compiled.scope.basis === "view" && regime.kind !== "footprints") {
       // Without an area, a large table's scope is what the map shows; zoomed out, nothing.
       tables[table.name] = {
         state: "unavailable",

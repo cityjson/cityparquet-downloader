@@ -113,7 +113,6 @@ async function select(
     hiddenTypes: { all: false, types: options.hide ?? [] },
   };
   const plan = compileSelection(selection, table, chunks, []);
-  if (plan.kind !== "ready") throw new Error(plan.kind);
   const engine = await getEngine();
   await ensureColumns(plan.scope.chunks, plan.columns);
   for (const s of materialiseSql(table.name, plan.scope.chunks, plan)) await engine.exec(s);
@@ -188,7 +187,6 @@ describe("selections on the Delft fixture", () => {
       delft.chunks,
       [],
     );
-    if (plan.kind !== "ready") throw new Error(plan.kind);
     const engine = await getEngine();
     await ensureColumns(plan.scope.chunks, ["oorspronkelijkbouwjaar", "b3_dak_type"]);
     const page = await engine.query(

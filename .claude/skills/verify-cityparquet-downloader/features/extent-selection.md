@@ -15,7 +15,7 @@ how many features are selected.
 - `area-clear` removes the area; the selection goes back to the whole scope.
 - `area-highlight` dims the footprints that are not selected.
 - `area-summary` shows, per table, `N of M features selected.` (role `status`).
-- `area-too-large` refuses a scope over 400,000 rows and says what reading it would cost.
+- `area-large` selects from every row group under the area, with no row limit, and counts them as they load.
 
 ## How to get to it (user POV)
 
@@ -35,7 +35,7 @@ Preconditions:
 - **View.** `control browser click --role button --name "Use current view"`.
 - **Cancel.** During a polygon, `control browser press --key Escape`: the hint goes and the area is unchanged.
 - **Clear.** `control browser click --role button --name "Clear area"`: `selection-area` reads `Area: none. …`.
-- **Too large.** On 3DBAG at the fitted view, `control browser text --testid table-scope` reads `Too many rows to select from: 329 row groups with 21,555,522 rows, about 790 MB to read. The limit is 400,000 rows. …` (role `alert`).
+- **Large area.** On 3DBAG, an area over more than six row groups: `control browser text --testid table-scope` reads `Loading the footprints of N row groups, k loaded…`, then `Selecting from … features in the N row groups under the area.` At the fitted view without an area it reads `Zoom in until footprints show, or draw an area.` (role `status`).
 - **Proof.** An independent count: `scripts/expect-selection.py` computes the fixture's answers in native DuckDB (`tests/browser/selection.expected.json`, case `delft area`).
 
 ## Gotchas
