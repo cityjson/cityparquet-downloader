@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -24,8 +25,14 @@ const browser = (name: string, include: string[]): TestProjectInlineConfiguratio
   },
 });
 
+// The worker is bundled from this package; a wasm fetched from jsDelivr must be its version.
+const duckdbWasm = JSON.parse(
+  readFileSync(new URL("./node_modules/@duckdb/duckdb-wasm/package.json", import.meta.url), "utf8"),
+) as { version: string };
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: { __DUCKDB_WASM_VERSION__: JSON.stringify(duckdbWasm.version) },
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   // duckdb-wasm ships its own worker and .wasm; pre-bundling breaks their ?url imports.
   optimizeDeps: { exclude: ["@duckdb/duckdb-wasm"] },
