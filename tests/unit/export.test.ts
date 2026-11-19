@@ -3,7 +3,8 @@ import { type Chunk, type ChunkKey, chunksOf } from "@/core/chunk";
 import {
   exportFraction,
   checkRequest,
-  EXPORT_SIZE_LIMIT,
+  EXPORT_SIZE_LIMITS,
+  exportSizeLimit,
   type ExportRequest,
   estimateExport,
   exportColumns,
@@ -166,7 +167,11 @@ describe("estimateExport", () => {
       1000,
     );
     expect(big.tooLarge).toBe(true);
-    expect(EXPORT_SIZE_LIMIT).toBeGreaterThan(0);
+    // Only the streamed formats, and only on disk, get the large limit.
+    expect(exportSizeLimit("cityjsonseq", true)).toBe(EXPORT_SIZE_LIMITS.streamed);
+    expect(exportSizeLimit("cityparquet", true)).toBe(EXPORT_SIZE_LIMITS.streamed);
+    expect(exportSizeLimit("cityjsonseq", false)).toBe(EXPORT_SIZE_LIMITS.held);
+    expect(exportSizeLimit("cityjson", true)).toBe(EXPORT_SIZE_LIMITS.held);
   });
 });
 

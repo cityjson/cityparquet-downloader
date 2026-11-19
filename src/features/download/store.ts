@@ -13,12 +13,15 @@ import {
   type ExportRequest,
   estimateExport,
   exportFraction,
+  exportSizeLimit,
+  formatLabel,
+  STREAMED_FORMATS,
   type PackageTable,
   planExport,
   runExport,
   writtenSql,
 } from "@/core";
-import { withEngine } from "@/engine/session";
+import { hasDisk, withEngine } from "@/engine/session";
 import { useMapData } from "@/features/map/footprints";
 import { featuresInScope } from "@/features/selection/describe";
 import {
@@ -135,14 +138,19 @@ export function prepare(
     selected: s.count,
     drawable: featuresInScope(s, cache),
   }));
-  const estimate = estimateExport(inputs, request);
+  const disk = hasDisk();
+  const estimate = estimateExport(inputs, request, exportSizeLimit(request.format, disk));
   const problem =
     ready.length === 0
       ? "Nothing is selected. Draw an area, filter a table, or zoom in until footprints show."
       : chosen.length === 0
         ? `No selected table has LoD ${objLod}. Choose another level of detail for the OBJ.`
         : estimate.tooLarge
-          ? `Too large to write in the browser. The ${estimate.selected.toLocaleString("en-GB")} selected features hold about ${mb(estimate.keptBytes)}, and the limit is ${mb(estimate.limit)}. Select fewer features, LoDs or attributes.`
+          ? `Too large to write as ${formatLabel(request.format)} in the browser. The ${estimate.selected.toLocaleString("en-GB")} selected features hold about ${mb(estimate.keptBytes)}, and the limit is ${mb(estimate.limit)}. ${
+              disk && !STREAMED_FORMATS.includes(request.format)
+                ? `CityJSONSeq and CityParquet can be written up to ${mb(exportSizeLimit("cityjsonseq", true))}; or select`
+                : "Select"
+            } fewer features, LoDs or attributes.`
           : checkRequest(tables, request);
   return { request, inputs, estimate, problem, skipped };
 }

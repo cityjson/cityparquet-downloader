@@ -95,13 +95,21 @@ export function checkRequest(
 }
 
 /**
- * The most compressed bytes a download keeps in the browser: the selected share of the
- * chosen columns. DuckDB's wasm heap cannot grow past 4 GiB, and a download takes about
- * 45 to 85 times this in memory on top of the map's: on 3DBAG, 19.3 MB (15,430 buildings,
- * every LoD and attribute) took the tab from 1.4 to 2.4 GiB as CityJSONSeq and to 3.0 GiB
- * as CityJSON. Measured in docs/findings.md.
+ * The most compressed bytes a download keeps: the selected share of the chosen columns.
+ * CityJSONSeq and CityParquet are written from the staged files as a stream, so on disk
+ * they go far; the other writers hold the whole output in the wasm heap, which ends at
+ * 4 GiB, and take up to 85 times what is kept (CityJSON: 19.3 MB took the tab to
+ * 3.0 GiB). Without a disk the staged files are in that heap too. Measured in
+ * docs/findings.md.
  */
-export const EXPORT_SIZE_LIMIT = 1_000_000_000;
+export const EXPORT_SIZE_LIMITS = { streamed: 1_000_000_000, held: 20_000_000 } as const;
+
+/** The formats whose writers stream. */
+export const STREAMED_FORMATS: readonly ExportFormat[] = ["cityjsonseq", "cityparquet"];
+
+/** The limit for a format; `disk` says whether the engine stages on disk. */
+export const exportSizeLimit = (format: ExportFormat, disk: boolean): number =>
+  disk && STREAMED_FORMATS.includes(format) ? EXPORT_SIZE_LIMITS.streamed : EXPORT_SIZE_LIMITS.held;
 
 export interface ExportEstimate {
   /** Selected rows (before features are completed). */
@@ -126,7 +134,7 @@ const bytesOf = (groups: readonly RowGroup[], columns: readonly string[]) =>
 export function estimateExport(
   inputs: readonly (ExportInput & { selected: number; drawable: number })[],
   request: ExportRequest,
-  limit = EXPORT_SIZE_LIMIT,
+  limit = exportSizeLimit(request.format, true),
 ): ExportEstimate {
   let selected = 0;
   let rowGroups = 0;
