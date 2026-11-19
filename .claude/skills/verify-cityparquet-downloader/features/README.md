@@ -1,0 +1,52 @@
+# CityParquet downloader verification map
+
+The maintained list of what a user can do in the app and how to prove each thing works.
+Read this index, then the file of the feature you are verifying. `control` is
+`node .claude/skills/verify-cityparquet-downloader/scripts/control.mjs`.
+
+## Baseline preconditions
+
+- `pnpm install` has been run and the network is reachable.
+- `control launch` succeeded and `control doctor` passes. Without `--source` the page
+  opens `fixtures/delft/`.
+- `control browser goto` followed by `control browser wait --text "is ready" --timeout 90000`
+  has returned: DuckDB is started.
+- Never drive an instance this run did not launch.
+
+## Driving conventions
+
+- Start each recipe from a fresh `control browser goto`, unless it says otherwise. A
+  reload is the only reset there is.
+- Target by role and visible text, not by CSS or position.
+- Commands are literal. Keep quoted names unchanged.
+- Wait for the element that shows the result, never for a fixed time.
+
+## Proof and skip reporting
+
+- Capture the action and the resulting state.
+- UI proof is an ARIA snapshot and a screenshot with the heading visible.
+- Put each artifact under `<feature>/<step>` and name the feature id in the report.
+- If a step cannot be reached, report the command tried and the unmet precondition.
+- A path that was skipped is not verified by proving a different one.
+
+## Feature entry contract
+
+Each feature file has an H1 and one paragraph on the user-visible behaviour, then
+exactly these H2 sections in this order: `Sub-features`, `How to get to it (user POV)`,
+`Driving it with control`, `Gotchas`. No implementation details: only user paths, stable
+handles, required state, commands and observable proof.
+
+## Features
+
+- [Start the app](./startup.md) covers the page loading and DuckDB starting with its extensions.
+- [Open a package](./open-package.md) covers opening the configured package and its summary.
+- [Map](./map.md) covers the map, the camera fitting the package, the overview of row groups, the basemap and the theme.
+- [Footprints](./footprints.md) covers reading and drawing footprints when zoomed in, their cache, and the bbox fallback.
+- [Legend](./legend.md) covers the object types on the map, their colours and hiding them.
+- [Attribute popup](./attribute-popup.md) covers hovering and clicking a footprint to read its attributes.
+- [Area selection](./extent-selection.md) covers drawing a polygon or rectangle or taking the view, the highlight and the selection summary.
+- [Filter](./filter.md) covers a table's filter bar: conditions, and or or, apply and clear, and the SQL.
+- [Feature table](./table.md) covers the drawer: tabs, pages, sorting, columns, and rows linked to footprints.
+- [Download](./download.md) covers writing the selection: format, LoDs, attributes, the estimate, running, cancelling and the size guard.
+
+Each new user-facing feature adds a file here in the same change that adds the feature.
