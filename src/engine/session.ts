@@ -41,6 +41,10 @@ async function start(): Promise<BrowserEngine> {
   }
 }
 
+/** Whether the browser has the origin private file system, where the engine stages downloads. */
+export const hasDisk = (): boolean =>
+  typeof navigator !== "undefined" && typeof navigator.storage?.getDirectory === "function";
+
 /** The running engine, started if there is none. */
 export function getEngine(): Promise<BrowserEngine> {
   current ??= start().catch((e: unknown) => {
