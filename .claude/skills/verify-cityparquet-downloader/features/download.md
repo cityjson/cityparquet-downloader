@@ -16,7 +16,7 @@ selected feature is written whole: a building brings its parts.
 - `download-run` runs it, shows a progress bar with the step, the percentage and the seconds, saves the file and reports it.
 - `download-cancel` stops a running download; the next one runs normally.
 - `download-single` writes every download as one file, staged on the browser's disk storage (OPFS).
-- `download-too-large` refuses a download that keeps more than its format's limit (150 MB for CityJSONSeq and CityParquet, 20 MB for the others), with its numbers, and disables the button.
+- `download-too-large` refuses a download that keeps more than its format's limit (170 MB for CityJSONSeq and CityParquet, 20 MB for the others), with its numbers, and disables the button.
 
 ## How to get to it (user POV)
 
@@ -41,7 +41,7 @@ Steps:
 - **Progress.** While it runs, the snapshot holds `progressbar "Download progress"`; `control browser text --testid download-percent` prints `P %, T s`, and P never goes down.
 - **Cancel.** Click `Download` with `control browser click`, wait for `Finding the parts of features` or `Reading row group`, then `control browser click --role button --name "Cancel download"`: `download-result` reads `Download cancelled.` (3DBAG: the reads stop within a row group).
 - **Single file.** On 3DBAG at footprint zoom on Delft without an area (131,009 features), as CityJSONSeq: `download-result` reads `Saved 3dbag-subset.city.jsonl: 640 MB, 262,144 city objects, in T s.` (about 4 minutes), and the file has 131,010 lines. As CityParquet a 258 MB zip of `building.parquet` and `metadata.json` (about 6 minutes).
-- **Too large.** With that selection and Format CityJSON: `control browser text --testid download-problem` prints `Too large to write as CityJSON in the browser. … and the limit is 20.0 MB. CityJSONSeq and CityParquet can be written up to 150.0 MB; or select fewer features, LoDs or attributes.` (role `alert`), and the snapshot shows `button "Download" [disabled]`. Over 150 MB (an area over a dozen row groups) the two large formats are refused too.
+- **Too large.** With that selection and Format CityJSON: `control browser text --testid download-problem` prints `Too large to write as CityJSON in the browser. … and the limit is 20.0 MB. CityJSONSeq and CityParquet can be written up to 170.0 MB; or select fewer features, LoDs or attributes.` (role `alert`), and the snapshot shows `button "Download" [disabled]`. Over 170 MB (an area over a dozen row groups) the two large formats are refused too.
 - **Proof.** The downloaded file and its checker report, a snapshot and a screenshot before and after. On the fixture all five formats; on 3DBAG at least one small Delft selection.
 
 ## Gotchas

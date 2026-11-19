@@ -291,14 +291,19 @@ failure`. Staged on OPFS, with every LoD and attribute, one fresh page each:
 
 | Kept | Format | Result |
 | --- | --- | --- |
-| 164 MB | CityJSONSeq | one 640 MB file of 131,010 lines in 212 s |
+| 164 MB | CityJSONSeq | one 640 MB file of 131,010 lines in 244 s; largest process 4,894 MiB at its peak |
 | 164 MB | CityParquet | a 258 MB package in 316 s; largest process 3,365 MiB at its peak |
 | 164 MB | FlatCityBuf | `Out of Memory Error: Allocation failure` |
 | 241 MB (425,691 buildings in scope, 13 row groups) | CityParquet | `cityparquet_write`: `failed to pin block … (1.3 GiB/1.3 GiB used)` |
+| 241 MB, the same area | CityJSONSeq | `Out of Memory Error: Allocation failure` while writing, after 2 minutes of staging |
 | 688 MB (24 row groups) | CityJSONSeq | `Out of Memory Error: Allocation failure` |
 
-The guard (`exportSizeLimit`) therefore allows 150 MB kept for CityJSONSeq and CityParquet
+The guard (`exportSizeLimit`) therefore allows 170 MB kept for CityJSONSeq and CityParquet
 on disk and 20 MB for everything else.
+
+The CityJSONSeq writer's peak is above the wasm heap's 4 GiB, so part of it is outside
+the heap; whether the writer or duckdb-wasm's file layer holds the output until the file
+is closed is not known.
 
 ### OPFS in duckdb-wasm
 

@@ -161,7 +161,7 @@ A Download section in the side panel writes the selection (`src/core/export.ts`,
   `opfs://cityparquet-downloader`, emptied before each download and at start-up; the saved
   file is handed to the browser as it lies on disk. Without OPFS everything is in memory.
 - A download that keeps more than its format's limit is refused, with its numbers
-  (`exportSizeLimit`): 150 MB of compressed columns for CityJSONSeq and CityParquet on
+  (`exportSizeLimit`): 170 MB of compressed columns for CityJSONSeq and CityParquet on
   disk, 20 MB otherwise. The CityJSON, FlatCityBuf and OBJ writers hold the whole output
   in the wasm heap, which ends at 4 GiB; the refusal names the two formats that go
   further.

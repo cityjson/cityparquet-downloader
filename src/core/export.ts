@@ -96,15 +96,15 @@ export function checkRequest(
 
 /**
  * The most compressed bytes a download keeps: the selected share of the chosen columns.
- * CityJSONSeq and CityParquet are written from the staged files as a stream, so on disk
- * they go far; the other writers hold the whole output in the wasm heap, which ends at
- * 4 GiB, and take up to 85 times what is kept (CityJSON: 19.3 MB took the tab to
- * 3.0 GiB). Without a disk the staged files are in that heap too. Measured in
- * docs/findings.md.
+ * CityJSONSeq and CityParquet are written from files staged on disk and were written at
+ * 164 MB on 3DBAG (a 640 MB file, a 258 MB package), not at 241 MB. The other writers hold
+ * the whole output in the wasm heap, which ends at 4 GiB, and take up to 85 times what is
+ * kept (CityJSON: 19.3 MB took the tab to 3.0 GiB). Without a disk the staged files are
+ * in that heap too. Measured in docs/findings.md.
  */
-export const EXPORT_SIZE_LIMITS = { streamed: 1_000_000_000, held: 20_000_000 } as const;
+export const EXPORT_SIZE_LIMITS = { streamed: 170_000_000, held: 20_000_000 } as const;
 
-/** The formats whose writers stream. */
+/** The formats that are written from disk to disk. */
 export const STREAMED_FORMATS: readonly ExportFormat[] = ["cityjsonseq", "cityparquet"];
 
 /** The limit for a format; `disk` says whether the engine stages on disk. */
