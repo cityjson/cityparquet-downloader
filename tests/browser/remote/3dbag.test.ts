@@ -1,6 +1,6 @@
 // The national 3DBAG package (14.4 GB, one file) opened from its public host, footers
 // only. Opt-in: CITYPARQUET_REMOTE=1 (`just test-remote`).
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import {
   DEFAULT_SOURCE,
   describeSql,

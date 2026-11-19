@@ -14,11 +14,14 @@ and moves bytes. Parsing and serialisation belong to the `cityjson` DuckDB exten
 
 ## Commands
 
+Vite+ (`vp`) is the toolchain: dev server, build, Vitest, Oxlint and Oxfmt, configured in
+`vite.config.ts`. Import from `vite-plus` and `vite-plus/test`, not `vite` or `vitest`.
+
 ```sh
 just install        # pnpm install --frozen-lockfile
 just dev            # dev server; VITE_CITYPARQUET_URL=… opens another package
-just check          # Biome format + lint, tsc. Changes nothing
-just fmt            # Biome, writing
+just check          # vp check: Oxfmt, Oxlint, type check. Changes nothing
+just fmt            # vp check --fix
 just test           # unit tests (src/core, Node)
 just test-browser   # real duckdb-wasm in Chromium, against fixtures/ served by Vite
 just test-remote    # opt-in: the public packages on cityparquet.open3d.city
@@ -51,7 +54,8 @@ fixtures/       small packages cut by scripts/make-fixture.py; never edit by han
 ## Invariants
 
 - `src/core` imports nothing from React, DuckDB, `src/engine`, `src/features` or browser
-  globals (`window`, `fetch`, …). Biome enforces it. It takes an `Engine` and a `Fetch`.
+  globals (`window`, `fetch`, …). Oxlint enforces it (`lint` in `vite.config.ts`). It takes
+  an `Engine` and a `Fetch`.
 - `src/engine/duckdb.ts` is the only code that imports `@duckdb/duckdb-wasm`.
 - `@duckdb/duckdb-wasm` is pinned exactly (`1.33.1-dev118.0`): the extension builds
   follow its DuckDB version. Never a caret range.

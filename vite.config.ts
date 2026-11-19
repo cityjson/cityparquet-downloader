@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { playwright } from "@vitest/browser-playwright";
-import { defineConfig, type TestProjectInlineConfiguration } from "vitest/config";
+import { defineConfig, type TestProjectInlineConfiguration } from "vite-plus";
+import { playwright } from "vite-plus/test/browser-playwright";
 
 const browser = (name: string, include: string[]): TestProjectInlineConfiguration => ({
   extends: true,
@@ -36,6 +36,60 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   // duckdb-wasm ships its own worker and .wasm; pre-bundling breaks their ?url imports.
   optimizeDeps: { exclude: ["@duckdb/duckdb-wasm"] },
+  fmt: {
+    printWidth: 100,
+    ignorePatterns: [
+      "dist/**",
+      "fixtures/**",
+      "pnpm-lock.yaml",
+      "**/*.md",
+      "tests/browser/*.expected.json",
+    ],
+  },
+  lint: {
+    ignorePatterns: ["dist/**", "fixtures/**"],
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    overrides: [
+      {
+        // src/core is pure TypeScript: it takes an Engine and a Fetch, and runs without a browser.
+        files: ["src/core/**"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              paths: [
+                { name: "react", message: "src/core is pure TypeScript: no React." },
+                { name: "react-dom", message: "src/core is pure TypeScript: no React." },
+                { name: "zustand", message: "src/core is pure TypeScript: no state store." },
+                {
+                  name: "@duckdb/duckdb-wasm",
+                  message: "src/core sends SQL through Engine; DuckDB lives in src/engine.",
+                },
+              ],
+              patterns: [
+                {
+                  group: ["@/engine*", "@/features*", "@/components*", "@/lib*", "../*"],
+                  message: "src/core imports only from itself and @cityjson/cjconv-core.",
+                },
+              ],
+            },
+          ],
+          "no-restricted-globals": [
+            "error",
+            { name: "window", message: "src/core runs without a browser." },
+            { name: "document", message: "src/core runs without a browser." },
+            { name: "location", message: "src/core runs without a browser; take a base URL." },
+            { name: "navigator", message: "src/core runs without a browser." },
+            { name: "fetch", message: "src/core takes a Fetch argument instead." },
+            { name: "Worker", message: "src/core runs without a browser." },
+            { name: "localStorage", message: "src/core runs without a browser." },
+          ],
+        },
+      },
+    ],
+    options: { typeAware: true, typeCheck: true },
+  },
   test: {
     projects: [
       { extends: true, test: { name: "unit", include: ["tests/unit/**/*.test.ts"] } },

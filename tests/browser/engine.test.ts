@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { discardEngine, getEngine, withEngine } from "@/engine/session";
 
 const names = async () =>

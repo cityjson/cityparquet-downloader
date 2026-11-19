@@ -3,7 +3,7 @@
 // Chromium per run, both started here and only ever stopped by pid.
 //
 //   control.mjs launch [--source <package URL>] | doctor | cleanup
-//   control.mjs launch --preview          the production build in dist/, served by vite preview
+//   control.mjs launch --preview          the production build in dist/, served by vp preview
 //   control.mjs browser <goto|click|hover|drag|wheel|fill|select|press|wait|text|snapshot|
 //                        screenshot|eval|map-view|map-at|download> [--flags]
 //   control.mjs network <mark|summary> [--host <name>]
@@ -133,8 +133,8 @@ async function launch() {
   const vite = spawn(
     process.execPath,
     [
-      path.join(repo, "node_modules/vite/bin/vite.js"),
-      ...(preview ? ["preview"] : []),
+      path.join(repo, "node_modules/vite-plus/bin/vp"),
+      preview ? "preview" : "dev",
       "--host",
       "127.0.0.1",
       "--port",
@@ -341,7 +341,7 @@ async function browser() {
         console.log(flags.state ?? "visible");
         break;
       case "text":
-        // biome-ignore lint/performance/useDomNodeTextContent: the rendered text is what a user reads
+        // The rendered text is what a user reads
         console.log(await target().first().innerText({ timeout }));
         break;
       case "snapshot": {
@@ -456,7 +456,8 @@ async function browser() {
               const ring =
                 (f.geometry.type === "Polygon"
                   ? f.geometry.coordinates
-                  : f.geometry.coordinates[0])?.[0] ?? [];
+                  : f.geometry.coordinates[0]
+                )?.[0] ?? [];
               const xs = ring.map((p) => p[0]);
               const ys = ring.map((p) => p[1]);
               const p = m.project([

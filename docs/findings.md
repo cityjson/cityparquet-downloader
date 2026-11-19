@@ -33,7 +33,7 @@ The requests, in order:
 
 The DuckDB engine starts in about 4 s (33.7 MB of wasm, then the four extensions), so the
 footer requests begin about 4.7 s after page load. Footer statements in the browser
-(`CITYPARQUET_REMOTE=1 pnpm exec vitest run --project remote --silent=false`), one run:
+(`CITYPARQUET_REMOTE=1 pnpm exec vp test run --project remote --silent=false`), one run:
 
 | Statement | Time | What it reads |
 | --- | --- | --- |

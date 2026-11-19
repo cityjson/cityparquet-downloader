@@ -1,7 +1,7 @@
 // The map's reads on the national 3DBAG file: the row group of footprints over central
 // Delft, tiles cut from it, and one feature's attributes. Opt-in: CITYPARQUET_REMOTE=1.
 // Bytes on the wire are in docs/findings.md, measured with the verification skill.
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import {
   attributesSql,
   chunksOf,
