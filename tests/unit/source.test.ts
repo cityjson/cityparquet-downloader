@@ -124,7 +124,7 @@ describe("resolveSource", () => {
   test("an HTML page in place of every file is not a package", async () => {
     await expect(
       resolveSource(parseSource("https://h/none/", BASE), indexPageFetch),
-    ).rejects.toThrow(/no CityParquet files/);
+    ).rejects.toThrow(/No CityParquet files/);
   });
 
   test("a single file is a package of one table, read without any request", async () => {
@@ -161,6 +161,6 @@ describe("resolveSource", () => {
   test("a wildcard with no metadata.json to expand it is an error that says so", async () => {
     await expect(
       resolveSource(parseSource("https://h/nl/**/building.parquet", BASE), fakeFetch({})),
-    ).rejects.toThrow(/cannot expand/);
+    ).rejects.toThrow(/Cannot expand/);
   });
 });

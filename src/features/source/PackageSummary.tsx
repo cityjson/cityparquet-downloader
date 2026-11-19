@@ -22,8 +22,9 @@ export function PackageSummary() {
       return (
         <Alert variant="destructive" role="alert">
           <AlertTitle>Could not open the package</AlertTitle>
-          <AlertDescription className="break-all">
-            {pkg.url}: {pkg.message}
+          <AlertDescription className="flex flex-col gap-1">
+            <span className="break-all">{pkg.url}</span>
+            <span className="break-words">{pkg.message}</span>
           </AlertDescription>
         </Alert>
       );
