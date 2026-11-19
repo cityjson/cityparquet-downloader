@@ -269,10 +269,8 @@ and 1.6 MB after the click), and the next download runs normally.
 
 ### Memory and the size limit
 
-A download is written in parts of about 8 MB (`EXPORT_PART_BYTES`) of the chosen columns'
-compressed bytes, because DuckDB's wasm heap cannot grow past 4 GiB and writing at once
-costs what the table shows. Views of Delft taken as the area, every LoD and attribute,
-written at once, one fresh page each:
+Written at once from a table in memory, a download costs what the table shows. Views of
+Delft taken as the area, every LoD and attribute, one fresh page each:
 
 | Selected (objects) | Kept | Format | File | Time | Read | Largest process, before and peak |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -284,14 +282,40 @@ written at once, one fresh page each:
 
 The largest process is the renderer, which holds the page and DuckDB's worker. A download
 adds 45 (CityParquet) to 85 (CityJSON) times what it keeps, so at 19.3 MB CityJSON
-reaches 3.0 GiB.
+reaches 3.0 GiB, and DuckDB's wasm heap cannot grow past 4 GiB.
 
-In parts, memory stays flat. The four row groups in view at footprint zoom on Delft,
-without an area: 131,009 buildings (262,144 objects), 164 MB kept, as CityJSONSeq in 21
-parts made a 622 MB zip in 216 s, and the largest process peaked at 1,932 MiB. Every part
-is a complete file; together they hold each object once. The guard refuses a download
-that keeps more than 250 MB (`EXPORT_SIZE_LIMIT`), about 1 GB of files; nothing larger
-than the 164 MB above has been run.
+So the rows are staged as Parquet files and written once from them. Staged in DuckDB's
+memory file system, the four row groups in view at footprint zoom on Delft (131,009
+buildings, 262,144 objects, 164 MB kept) end in `Out of Memory Error: Allocation
+failure`. Staged on OPFS, with every LoD and attribute, one fresh page each:
+
+| Kept | Format | Result |
+| --- | --- | --- |
+| 164 MB | CityJSONSeq | one 640 MB file of 131,010 lines in 212 s |
+| 164 MB | CityParquet | a 258 MB package in 316 s; largest process 3,365 MiB at its peak |
+| 164 MB | FlatCityBuf | `Out of Memory Error: Allocation failure` |
+| 241 MB (425,691 buildings in scope, 13 row groups) | CityParquet | `cityparquet_write`: `failed to pin block … (1.3 GiB/1.3 GiB used)` |
+| 688 MB (24 row groups) | CityJSONSeq | `Out of Memory Error: Allocation failure` |
+
+The guard (`exportSizeLimit`) therefore allows 150 MB kept for CityJSONSeq and CityParquet
+on disk and 20 MB for everything else.
+
+### OPFS in duckdb-wasm
+
+- `opfs: { fileHandling: "auto" }` opens the `opfs://` files a statement names, for that
+  statement. `COPY … TO`, `read_parquet`, `glob`, the `cityjson` writers and
+  `cityparquet_write` to a directory all work on such paths; the files lie under
+  `duckdb/fs/` in the origin private file system.
+- A file is opened only when the statement names it. `cityparquet_read` of an `opfs://`
+  directory fails (`the file exists but was not prepared before it`), and so does a later
+  statement that needs a temp file an earlier one wrote: with `temp_directory` on OPFS, a
+  table in memory that was evicted cannot be read back (seen at 688 MB as CityParquet).
+  A sort that spills and reads back within one statement works.
+- A path with a space is not opened for reading. Writing to one works.
+- The defaults are `temp_directory = 'js_buffer://tmp'`, in the wasm heap, and
+  `memory_limit = '3.1 GiB'` of a heap of 4 GiB. With them CityParquet at 164 MB kept
+  ends in `Allocation failure`; with the temp directory on OPFS and 1.5 GB it is written.
+- A database file on OPFS can be attached and written (`ATTACH 'opfs://…/x.db'`).
 
 ## What the writers need from the extension
 
@@ -323,6 +347,16 @@ Used as is, x quantises to integers near 1.04e11. A CityJSON file still reads ba
 FlatCityBuf file is written without an error and reads back with `xmin` 36.71 instead of
 139.78. The app passes the footer's scale and the data's minimum corner as
 `transform_translate`.
+
+### Writers that hold the whole output
+
+`cityparquet_write` orders the whole table by a Hilbert key in one statement, and takes
+only a schema of the default catalog whose tables are base tables: a view over staged
+Parquet files is refused (`has no CityParquet object table`), and a schema of an attached
+database is not found unless that database is the default. So a package is limited by
+what one sort can pin (164 MB kept is written, 241 MB is not). The FlatCityBuf and
+CityJSON writers build their output in memory. Each would go further if it wrote as it
+read.
 
 ### Whole features
 
