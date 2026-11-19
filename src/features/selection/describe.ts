@@ -1,6 +1,6 @@
 // A table's selection in words, for the drawer and the side panel.
 import type { CacheEntry, ChunkKey } from "@/core";
-import { formatBytes, formatCount } from "@/features/source/format";
+import { formatCount } from "@/features/source/format";
 import type { TableSelection } from "./store";
 
 const groups = (n: number) => `${formatCount(n)} row ${n === 1 ? "group" : "groups"}`;
@@ -15,6 +15,13 @@ export function featuresInScope(
     return n + (e?.state === "ready" ? e.features : 0);
   }, 0);
 }
+
+/** The scope's row groups whose footprints the map holds. */
+const loaded = (
+  selection: Extract<TableSelection, { scope: unknown }>,
+  cache: ReadonlyMap<ChunkKey, CacheEntry>,
+): number =>
+  selection.scope.chunks.filter(({ chunk }) => cache.get(chunk.key)?.state === "ready").length;
 
 const STEPS = {
   footprints: "Loading the footprints of",
@@ -37,14 +44,9 @@ export function describeScope(
   switch (selection.state) {
     case "unavailable":
       return { text: selection.reason, problem: false };
-    case "too-large":
-      return {
-        text: `Too many rows to select from: ${groups(selection.scope.chunks.length)} with ${formatCount(selection.scope.rows)} rows, about ${formatBytes(selection.readBytes)} to read. The limit is ${formatCount(selection.limit)} rows. Draw a smaller area${selection.scope.basis === "extent" ? "" : " or zoom in"}.`,
-        problem: true,
-      };
     case "loading":
       return {
-        text: `${STEPS[selection.step]} ${groups(selection.scope.chunks.length)}…`,
+        text: `${STEPS[selection.step]} ${groups(selection.scope.chunks.length)}${selection.step === "footprints" ? `, ${formatCount(loaded(selection, cache))} loaded` : ""}…`,
         problem: false,
       };
     case "failed":

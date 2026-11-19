@@ -8,7 +8,6 @@ import {
   fromMercator,
   parseExtent,
   type ScopeChunk,
-  SELECTION_ROW_LIMIT,
   type Selection,
   selectionPageSql,
   toMercator,
@@ -112,13 +111,12 @@ describe("compileSelection: the scope", () => {
 
   test("a drawn area scopes the row groups its box overlaps", () => {
     const plan = compileSelection({ ...none, extent: square }, table, chunks, []);
-    expect(plan.kind).toBe("ready");
     expect(plan.scope.basis).toBe("extent");
     expect(plan.scope.chunks.map((c) => c.id)).toEqual([11]);
     expect(plan.scope.rows).toBe(100);
   });
 
-  test("without an area, a table that fits the limit is its own scope", () => {
+  test("without an area, a small table is its own scope", () => {
     const plan = compileSelection(none, table, chunks, [chunks[1] as ScopeChunk]);
     expect(plan.scope.basis).toBe("table");
     expect(plan.scope.chunks).toHaveLength(3);
@@ -127,15 +125,14 @@ describe("compileSelection: the scope", () => {
   test("without an area, a large table is scoped to the row groups in view", () => {
     const big = [chunk(0, 300_000, 3), chunk(1, 300_000, 4)];
     const plan = compileSelection(none, table, big, [big[1] as ScopeChunk]);
-    expect(plan.kind).toBe("ready");
     expect(plan.scope.basis).toBe("view");
     expect(plan.scope.chunks.map((c) => c.id)).toEqual([11]);
   });
 
-  test("a scope over the limit is refused, with its size", () => {
-    const big = [chunk(0, 300_000, 3), chunk(1, 300_000, 4)];
-    const plan = compileSelection(none, table, big, big);
-    expect(plan).toMatchObject({ kind: "too-large", limit: SELECTION_ROW_LIMIT });
+  test("a drawn area scopes every row group under it, however many rows", () => {
+    const big = [chunk(0, 300_000, 4), chunk(1, 300_000, 4)];
+    const plan = compileSelection({ ...none, extent: square }, table, big, []);
+    expect(plan.scope.chunks).toHaveLength(2);
     expect(plan.scope.rows).toBe(600_000);
   });
 });
@@ -159,7 +156,6 @@ describe("compileSelection: the predicate", () => {
 
   test("everything in scope without an area, a filter or hidden types", () => {
     const plan = compileSelection(none, table, chunks, []);
-    if (plan.kind !== "ready") throw new Error(plan.kind);
     expect(plan.where).toBe("TRUE");
     expect(plan.columns).toEqual([]);
   });
@@ -176,7 +172,6 @@ describe("compileSelection: the predicate", () => {
       chunks,
       [],
     );
-    if (plan.kind !== "ready") throw new Error(plan.kind);
     const ring = [
       [4.2, 50.2],
       [4.4, 50.2],
@@ -200,13 +195,11 @@ describe("compileSelection: the predicate", () => {
       chunks,
       [],
     );
-    if (plan.kind !== "ready") throw new Error(plan.kind);
     expect(plan.where).toBe("FALSE");
   });
 
   test("only attribute columns are read; the map already holds id, feature_id and object_type", () => {
     const plan = compileSelection({ ...none, filter }, table, chunks, []);
-    if (plan.kind !== "ready") throw new Error(plan.kind);
     expect(plan.columns).toEqual(["roof"]);
   });
 });

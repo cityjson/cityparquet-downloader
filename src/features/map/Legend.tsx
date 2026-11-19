@@ -4,7 +4,7 @@ import { colourOf } from "@/core";
 import { formatCount } from "@/features/source/format";
 import { usePackage } from "@/features/source/store";
 import { useMapData } from "./footprints";
-import { isShown, legendKey, toggleLegend, useLegend } from "./legend";
+import { isShown, legendKey, toggleLegend, useLegend } from "./legendStore";
 
 export function Legend() {
   const pkg = usePackage();

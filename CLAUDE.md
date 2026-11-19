@@ -25,7 +25,7 @@ just fmt            # vp check --fix
 just test           # unit tests (src/core, Node)
 just test-browser   # real duckdb-wasm in Chromium, against fixtures/ served by Vite
 just test-remote    # opt-in: the public packages on cityparquet.open3d.city
-just build          # tsc, then vite build into dist/
+just build          # vp build into dist/
 just build-deploy   # the Cloudflare build: wasm from jsDelivr, every file under 25 MiB
 just deploy         # build-deploy, then wrangler deploy (needs Cloudflare credentials)
 just fixture        # regenerate fixtures/ (Python duckdb 2.0, network)
@@ -73,6 +73,8 @@ fixtures/       small packages cut by scripts/make-fixture.py; never edit by han
   predicate: in wasm `id = …` reads the `id` column of every row group (findings.md).
 - Every engine call from the app goes through `withEngine`; long reads are `background`,
   so tiles and clicks are not stuck behind them.
+- No two files in `src` differ only by case or extension (`Legend.tsx`, `legend.ts`): on
+  macOS the import resolves to the wrong one. A unit test checks it.
 - Write tests first for `src/core`. Keep only tests that prove something a user or a
   later phase relies on. Remote-host tests go in `tests/browser/remote/`.
 

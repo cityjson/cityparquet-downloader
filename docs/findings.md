@@ -231,11 +231,9 @@ Within the area, `oorspronkelijkbouwjaar < 1950` selects 123, and with
 
 ### Limits
 
-- A scope over 400,000 rows (`SELECTION_ROW_LIMIT`, six row groups of 3DBAG) is refused
-  with what looking at it would read. From the fitted view: all 329 row groups, 21.6
-  million rows, about 790 MB. Each row group's footprints cost 2.4 to 3.0 s and about 5 MB to
-  load, one after another, so six take about 20 s; the limit keeps a selection to what
-  the map could draw.
+- An area's scope has no row limit. Each row group's footprints cost 2.4 to 3.0 s and
+  about 5 MB to load, one after another, and stay in memory while selected: six take about
+  20 s, and all 329 of 3DBAG (21.6 million rows, about 790 MB) would not fit the wasm heap.
 - Without an area the scope is the row groups in view, whole: zoomed to central Delft
   that is 4 row groups, 131,009 features, although the view shows far fewer.
 - A value box with a `list` attribute (the datalist of a text column's values) has the

@@ -96,10 +96,10 @@ highlight, the table and the download. Its rows are the rows the map draws: thos
 LoD 0 footprint, or, in a table without one, a `bbox`.
 
 - Scope: the row groups the selection can hold. With an area, those whose WGS 84 outline
-  overlaps the area's box. Without one, the whole table when it has at most 400,000 rows
-  (`SELECTION_ROW_LIMIT`), else the row groups in view, and nothing while the map shows
-  only row-group outlines. A scope over the limit is refused, with what reading it would
-  cost. The scope's row groups stay loaded in the map's cache while it is selected.
+  overlaps the area's box, however many. Without one, the whole table when it has at most
+  400,000 rows (`WHOLE_TABLE_ROWS`), else the row groups in view, and nothing while the
+  map shows only row-group outlines. The scope's row groups stay loaded in the map's cache
+  while it is selected, and the drawer counts them as they load.
 - Area: a polygon (click the corners; double-click or Enter finishes, Escape cancels), a
   rectangle dragged on the map, or the current view. Its edges are straight in Web
   Mercator, as drawn, so the exact test is `ST_Intersects` with the footprints the map
@@ -149,7 +149,8 @@ A Download section in the side panel writes the selection (`src/core/export.ts`,
 - Writer options the extension needs stated (findings.md): `crs => AUTH:CODE` for a
   package, `crs` for the file formats, the footer's transform scale with the data's
   minimum corner as translate for the CityJSON family.
-- A run shows its step and can be cancelled between units of work. The panel shows what
+- A run shows a progress bar, its step, the percentage (`exportFraction`) and the seconds
+  it has taken, and can be cancelled between units of work. The panel shows what
   it reads (the chosen columns of the scope's row groups) and keeps (their selected
   share). A download that keeps more than 20 MB (`EXPORT_SIZE_LIMIT`, measured on 3DBAG)
   is refused, with its numbers.

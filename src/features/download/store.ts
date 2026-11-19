@@ -12,6 +12,7 @@ import {
   type ExportProgress,
   type ExportRequest,
   estimateExport,
+  exportFraction,
   type PackageTable,
   planExport,
   runExport,
@@ -43,7 +44,8 @@ export type DownloadProgress = ExportProgress | { step: "preparing" } | { step: 
 
 export type DownloadRun =
   | { state: "idle" }
-  | { state: "running"; progress: DownloadProgress }
+  /** `fraction`: how far it is, 0 to 1, never going back; `started`: `performance.now()` then. */
+  | { state: "running"; progress: DownloadProgress; fraction: number; started: number }
   | { state: "done"; name: string; bytes: number; rows: number; seconds: number }
   | { state: "cancelled" }
   | { state: "failed"; message: string };
@@ -164,8 +166,13 @@ export async function startDownload(): Promise<void> {
   running = abort;
   const { signal } = abort;
   const set = (run: DownloadRun) => useDownload.setState({ run });
-  set({ state: "running", progress: { step: "preparing" } });
   const started = performance.now();
+  let fraction = 0;
+  const step = (progress: DownloadProgress, at: number) => {
+    fraction = Math.max(fraction, at);
+    set({ state: "running", progress, fraction, started });
+  };
+  step({ step: "preparing" }, 0);
   try {
     await materialiseSelection();
     const pkg = usePackage.getState();
@@ -180,13 +187,13 @@ export async function startDownload(): Promise<void> {
     if (prepared.problem) throw new Error(prepared.problem);
     const plan = planExport(prepared.inputs, prepared.request, ++runs);
     const exec = <T>(progress: ExportProgress, work: Parameters<typeof withEngine<T>>[0]) => {
-      if (!signal.aborted) set({ state: "running", progress });
+      if (!signal.aborted) step(progress, exportFraction(progress));
       return withEngine(work, { priority: "background", signal });
     };
     try {
       const result = await runExport(plan, exec, signal);
       const { files } = result;
-      set({ state: "running", progress: { step: "saving" } });
+      step({ step: "saving" }, 0.97);
       const blob = await withEngine(
         async (engine) => {
           const read = async (f: string) => {
