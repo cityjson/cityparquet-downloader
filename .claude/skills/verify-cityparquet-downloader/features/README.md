@@ -47,5 +47,6 @@ handles, required state, commands and observable proof.
 - [Area selection](./extent-selection.md) covers drawing a polygon or rectangle or taking the view, the highlight and the selection summary.
 - [Filter](./filter.md) covers a table's filter bar: conditions, and or or, apply and clear, and the SQL.
 - [Feature table](./table.md) covers the drawer: tabs, pages, sorting, columns, and rows linked to footprints.
+- [Download](./download.md) covers writing the selection: format, LoDs, attributes, the estimate, running, cancelling and the size guard.
 
 Each new user-facing feature adds a file here in the same change that adds the feature.

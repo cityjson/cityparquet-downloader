@@ -5,7 +5,7 @@ clicked corner by corner, a rectangle dragged on the map, or the current view. W
 drawing, a hint at the bottom left says what to do, with `Finish` and `Cancel`. Once
 drawn, the area shows as a blue outline, the footprints outside it are dimmed, and the
 `Selection` section of the side panel reads `Area: drawn, N corners.` with, per table,
-how many features are selected and about how much a download reads.
+how many features are selected.
 
 ## Sub-features
 
@@ -14,7 +14,7 @@ how many features are selected and about how much a download reads.
 - `area-view` takes the current view as the area.
 - `area-clear` removes the area; the selection goes back to the whole scope.
 - `area-highlight` dims the footprints that are not selected.
-- `area-summary` shows, per table, `N of M features selected, about X to download.` (role `status`).
+- `area-summary` shows, per table, `N of M features selected.` (role `status`).
 - `area-too-large` refuses a scope over 400,000 rows and says what reading it would cost.
 
 ## How to get to it (user POV)
@@ -29,7 +29,7 @@ Preconditions:
 - Footprints are on the map (see [footprints.md](./footprints.md)). The drawer below the map takes half the window: keep the corners inside the map above it, and away from the toolbar at the top.
 
 - **Polygon on Delft.** For each corner `(4.3595, 52.0092)`, `(4.3620, 52.0089)`, `(4.3627, 52.0103)`, `(4.3610, 52.0111)`, `(4.3593, 52.0104)`: `control browser map-at --lon … --lat …` gives `x y`; after `control browser click --role button --name "Draw area"`, `control browser click --x … --y …` each. Then `control browser press --key Enter`.
-- **Result.** `control browser text --testid selection-area` prints `Area: drawn, 5 corners.`; `control browser wait --text "198 of"` returns, and `control browser text --testid selection-building` prints `198 of … features selected, about … to download.` (on the fixture and on 3DBAG). The grid's `control browser text --testid page-range` ends `of 198`.
+- **Result.** `control browser text --testid selection-area` prints `Area: drawn, 5 corners.`; `control browser wait --text "198 of"` returns, and `control browser text --testid selection-building` prints `198 of … features selected.` (on the fixture and on 3DBAG). The grid's `control browser text --testid page-range` ends `of 198`.
 - **Highlight.** `control browser eval --js "window.__map.queryRenderedFeatures({ layers: ['footprints-fill'] }).filter(f => f.properties.sel === 1).map(f => f.properties.id).filter((v, i, a) => a.indexOf(v) === i).length"` equals the count, or falls short of it only by footprints outside the view. Screenshot `extent-selection/<source>/area.png`: the selected footprints are solid, the rest faint.
 - **Rectangle.** `control browser click --role button --name "Draw rectangle"`, then `control browser drag --x … --y … --to-x … --to-y …`. `selection-area` reads `Area: drawn, 4 corners.`
 - **View.** `control browser click --role button --name "Use current view"`.
