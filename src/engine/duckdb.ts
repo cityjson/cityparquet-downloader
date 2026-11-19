@@ -60,6 +60,8 @@ function toRows(table: { toArray(): { toJSON(): unknown }[] }): Row[] {
 const OPFS = "opfs://";
 /** The app's directory in the origin private file system. */
 const SCRATCH = `${OPFS}cityparquet-downloader`;
+/** Where DuckDB puts what does not fit in memory. Beside `SCRATCH`, which is emptied between downloads. */
+const TEMP = `${OPFS}cityparquet-downloader-tmp`;
 
 /** The directory duckdb-wasm keeps `opfs://<path>` files in, or null without the file system. */
 async function opfsRoot(): Promise<FileSystemDirectoryHandle | null> {
@@ -117,6 +119,14 @@ export async function createEngine(): Promise<BrowserEngine> {
     for (const name of COMMUNITY_EXTENSIONS) {
       await conn.query(`INSTALL ${name} FROM community`);
       await conn.query(`LOAD ${name}`);
+    }
+    if (disk) {
+      // What does not fit in memory (a sort, a large table) goes to disk. The default keeps
+      // it in the wasm heap, which cannot grow past 4 GiB, and lets DuckDB take 3.1 GiB of it,
+      // leaving the extensions' writers too little.
+      await disk.removeEntry(TEMP.slice(OPFS.length), { recursive: true }).catch(() => undefined);
+      await conn.query(`SET temp_directory = '${TEMP}'`);
+      await conn.query(`SET memory_limit = '1500MB'`);
     }
     return {
       async query(sql) {
