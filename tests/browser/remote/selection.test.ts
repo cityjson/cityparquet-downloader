@@ -98,7 +98,6 @@ test("an area and a filter over Delft select what the package CRS agrees on", as
   };
   const area = compileSelection(base, table, chunks, []);
   const filtered = compileSelection({ ...base, filter: parsed.filter }, table, chunks, []);
-  if (area.kind !== "ready" || filtered.kind !== "ready") throw new Error("the scope is too large");
   const scope = area.scope.chunks;
   console.log(`scope: row groups ${scope.map((c) => c.chunk.index).join(", ")}`);
   expect(scope.length).toBeGreaterThan(0);

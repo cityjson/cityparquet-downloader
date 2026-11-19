@@ -50,23 +50,21 @@ export interface Scope {
   rows: number;
 }
 
-export type SelectionPlan =
-  | {
-      kind: "ready";
-      scope: Scope;
-      /** Over the scope's rows: `__geom` (EPSG:3857), `object_type` and attribute columns by name. */
-      where: Sql;
-      /** The attribute columns `where` reads, which the scope must hold. */
-      columns: readonly string[];
-    }
-  | { kind: "too-large"; scope: Scope; limit: number };
+export interface SelectionPlan {
+  scope: Scope;
+  /** Over the scope's rows: `__geom` (EPSG:3857), `object_type` and attribute columns by name. */
+  where: Sql;
+  /** The attribute columns `where` reads, which the scope must hold. */
+  columns: readonly string[];
+}
 
 /**
- * The most rows a selection looks at: about six 3DBAG row groups. Each costs a footprint
- * read (1.4 to 4.5 s in wasm) and an attribute read (1.4 to 2.5 s); measured in
- * docs/findings.md.
+ * The most rows a table has for a selection without an area to look at all of it: about
+ * six 3DBAG row groups. A larger table's selection looks at the row groups in view. Each
+ * row group costs a footprint read (1.4 to 4.5 s in wasm) and an attribute read (1.4 to
+ * 2.5 s); measured in docs/findings.md.
  */
-export const SELECTION_ROW_LIMIT = 400_000;
+export const WHOLE_TABLE_ROWS = 400_000;
 
 /** Columns `map_features` holds for every footprint, so they are never read again. */
 const MAP_COLUMNS = new Set(["id", "feature_id", "object_type"]);
@@ -127,7 +125,7 @@ function scopeOf(
   extent: Extent | null,
   chunks: readonly ScopeChunk[],
   view: readonly ScopeChunk[],
-  limit: number,
+  wholeTableRows: number,
 ): Scope {
   const of = (basis: Scope["basis"], picked: readonly ScopeChunk[]): Scope => ({
     basis,
@@ -142,26 +140,25 @@ function scopeOf(
     );
   }
   const whole = of("table", chunks);
-  return whole.rows <= limit ? whole : of("view", view);
+  return whole.rows <= wholeTableRows ? whole : of("view", view);
 }
 
 /**
  * The scope and the predicate of a table's selection. `chunks` are the table's row groups
  * as the map placed them, `view` those of them the map's view touches. With an area, the
- * scope is the row groups its box overlaps; without one, the whole table when it fits
- * the limit, else the row groups in view.
+ * scope is the row groups its box overlaps, however many; without one, the whole table
+ * when it has at most `wholeTableRows` rows, else the row groups in view.
  */
 export function compileSelection(
   selection: Selection,
   table: { columns: readonly { name: string }[] },
   chunks: readonly ScopeChunk[],
   view: readonly ScopeChunk[],
-  limit = SELECTION_ROW_LIMIT,
+  wholeTableRows = WHOLE_TABLE_ROWS,
 ): SelectionPlan {
-  const scope = scopeOf(selection.extent, chunks, view, limit);
-  if (scope.rows > limit) return { kind: "too-large", scope, limit };
+  const scope = scopeOf(selection.extent, chunks, view, wholeTableRows);
   const { extent, filter, hiddenTypes } = selection;
-  if (hiddenTypes.all) return { kind: "ready", scope, where: "FALSE" as Sql, columns: [] };
+  if (hiddenTypes.all) return { scope, where: "FALSE" as Sql, columns: [] };
   const parts: Sql[] = [];
   if (extent) parts.push(sql`ST_Intersects(__geom, ${extentSql(extent)})`);
   if (hiddenTypes.types.length > 0) {
@@ -172,7 +169,6 @@ export function compileSelection(
   if (filter) parts.push(compileFilter(filter));
   const known = new Set(table.columns.map((c) => c.name));
   return {
-    kind: "ready",
     scope,
     where: (parts.length === 0 ? "TRUE" : parts.map((p) => `(${p})`).join(" AND ")) as Sql,
     columns: attributeColumns(filter ? filterColumns(filter) : []).filter((c) => known.has(c)),
@@ -224,7 +220,7 @@ FROM ${ident(FEATURES_TABLE)} f${join} WHERE f.chunk = ${num(id)}`;
     .join("\nUNION ALL\n") as Sql;
 }
 
-type ReadyPlan = Pick<Extract<SelectionPlan, { kind: "ready" }>, "where" | "columns">;
+type ReadyPlan = Pick<SelectionPlan, "where" | "columns">;
 
 /** One row, `n`: how many of the scope's rows the selection holds. */
 export const selectionCountSql = (chunks: readonly ScopeChunk[], plan: ReadyPlan): Sql =>

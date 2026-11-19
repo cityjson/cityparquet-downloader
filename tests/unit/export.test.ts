@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { type Chunk, type ChunkKey, chunksOf } from "@/core/chunk";
 import {
+  exportFraction,
   checkRequest,
   EXPORT_SIZE_LIMIT,
   type ExportRequest,
@@ -243,4 +244,17 @@ describe("writeSql", () => {
       "subset",
     );
   });
+});
+
+test("exportFraction rises through the steps and ends below 1", () => {
+  const steps = [
+    exportFraction({ step: "expanding", done: 0, total: 4 }),
+    exportFraction({ step: "expanding", done: 4, total: 4 }),
+    exportFraction({ step: "reading", done: 0, total: 0 }),
+    exportFraction({ step: "reading", done: 1, total: 2 }),
+    exportFraction({ step: "writing" }),
+  ];
+  expect(steps[0]).toBe(0);
+  expect(steps).toEqual([...steps].sort((a, b) => a - b));
+  expect(steps.at(-1)).toBeLessThan(1);
 });

@@ -420,6 +420,23 @@ export type ExportProgress =
   | { step: "writing" };
 
 /**
+ * How far a run is, from 0 to 1. Finding the parts of features takes the first third,
+ * reading the row groups the next half and writing the rest. A step without a count sits
+ * at its start. Finding parts can add row groups, so a caller keeps the largest value.
+ */
+export function exportFraction(p: ExportProgress): number {
+  const share = (done: number, total: number) => (total === 0 ? 0 : Math.min(done / total, 1));
+  switch (p.step) {
+    case "expanding":
+      return 0.33 * share(p.done, p.total);
+    case "reading":
+      return 0.33 + 0.5 * share(p.done, p.total);
+    case "writing":
+      return 0.83;
+  }
+}
+
+/**
  * Runs one unit of work on the engine. The app queues each on its engine and reports the
  * progress; a test runs it directly.
  */

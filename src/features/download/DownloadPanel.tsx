@@ -1,6 +1,6 @@
 // The download, in the side panel: format, LoDs, attributes per table, file name, what it
 // would read, and the button; while it runs, its step and Cancel.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -50,16 +50,58 @@ function progressText(p: DownloadProgress, format: ExportFormat): string {
   }
 }
 
+/** Seconds since `started` (a `performance.now()`), ticking once a second. */
+function useElapsed(started: number): number {
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(performance.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return Math.max(0, Math.floor((now - started) / 1000));
+}
+
+function Running({
+  run,
+  format,
+}: {
+  run: Extract<DownloadRun, { state: "running" }>;
+  format: ExportFormat;
+}) {
+  const seconds = useElapsed(run.started);
+  const percent = Math.round(run.fraction * 100);
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <div
+        role="progressbar"
+        aria-label="Download progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-300"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <div className="flex justify-between gap-2">
+        <p role="status" data-testid="download-progress">
+          {progressText(run.progress, format)}
+        </p>
+        <span className="shrink-0 tabular-nums" data-testid="download-percent">
+          {percent} %, {seconds} s
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function RunState({ run, format }: { run: DownloadRun; format: ExportFormat }) {
   switch (run.state) {
     case "idle":
       return null;
     case "running":
-      return (
-        <p role="status" className="text-xs" data-testid="download-progress">
-          {progressText(run.progress, format)}
-        </p>
-      );
+      return <Running run={run} format={format} />;
     case "done":
       return (
         <p role="status" className="text-xs" data-testid="download-result">
