@@ -47,11 +47,28 @@ just check          # format, lint, type check
 just test           # unit tests
 just test-browser   # browser tests against fixtures/
 just build          # production build into dist/
+just build-deploy   # the build Cloudflare serves, checked against its size limit
 ```
 
 The browser tests run in Chromium through Playwright. Install it once with
 `pnpm exec playwright install chromium`, or set `CHROMIUM_PATH` to an installed Chromium.
 They fetch the DuckDB extensions from their hosts; the data comes from `fixtures/`.
+
+## Deploy
+
+The app is static files, served by Cloudflare Workers as static assets (`wrangler.jsonc`,
+worker `cityparquet-downloader`). Workers serve at most 25 MiB per file and the engine's
+`duckdb-base.wasm` is 33.7 MB, so `just build-deploy` builds with `VITE_DUCKDB_CDN=1`:
+the wasm is fetched from jsDelivr at the installed duckdb-wasm version, and
+`scripts/check-asset-sizes.mjs` fails the build if any file in `dist/` is over 25 MiB.
+The engine is single-threaded, so the site needs no COOP or COEP headers.
+
+`.github/workflows/deploy.yml` deploys on every push to `main`, and by hand. It needs the
+repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; without them it
+builds, checks and skips the deploy with a notice. `VITE_CITYPARQUET_URL` and
+`VITE_CARTO_KEY` are build-time variables, read from the repository variables of the
+same names; unset, the defaults apply. With credentials of your own, `just deploy` does
+the same from a checkout.
 
 ## Layout
 

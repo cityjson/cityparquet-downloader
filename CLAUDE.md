@@ -23,6 +23,8 @@ just test           # unit tests (src/core, Node)
 just test-browser   # real duckdb-wasm in Chromium, against fixtures/ served by Vite
 just test-remote    # opt-in: the public packages on cityparquet.open3d.city
 just build          # tsc, then vite build into dist/
+just build-deploy   # the Cloudflare build: wasm from jsDelivr, every file under 25 MiB
+just deploy         # build-deploy, then wrangler deploy (needs Cloudflare credentials)
 just fixture        # regenerate fixtures/ (Python duckdb 2.0, network)
 node scripts/measure-open.mjs [url]   # requests, bytes, time and memory of opening a package
 ```
@@ -53,6 +55,9 @@ fixtures/       small packages cut by scripts/make-fixture.py; never edit by han
 - `src/engine/duckdb.ts` is the only code that imports `@duckdb/duckdb-wasm`.
 - `@duckdb/duckdb-wasm` is pinned exactly (`1.33.1-dev118.0`): the extension builds
   follow its DuckDB version. Never a caret range.
+- Dev and tests bundle `duckdb-base.wasm`; the deploy build (`VITE_DUCKDB_CDN=1`) takes it
+  from jsDelivr at the installed version, because Cloudflare serves no file over 25 MiB.
+  The worker is always bundled. Never load the wasm of another version.
 - Never load `httpfs`: in wasm it breaks range reads. duckdb-wasm's own HTTP reads files.
 - The engine opens with `forceFullHTTPReads: false, reliableHeadRequests: true,
   allowFullHTTPReads: false`. Without all three, remote files are read whole.

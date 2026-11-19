@@ -1,0 +1,13 @@
+// Cloudflare Workers: static assets only, the Vite build in dist/, no Worker script.
+// `just build-deploy` makes that build (the engine's wasm from jsDelivr, so every file is
+// under the 25 MiB asset limit); `just deploy` or .github/workflows/deploy.yml deploys it.
+{
+  "name": "cityparquet-downloader",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    // One page with no routes: any other path serves index.html.
+    "not_found_handling": "single-page-application"
+  }
+}

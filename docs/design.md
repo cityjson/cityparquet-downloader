@@ -28,6 +28,7 @@ record it in `docs/findings.md`; do not work around it here.
 | Fact | Value |
 | --- | --- |
 | duckdb-wasm | `1.33.1-dev118.0` embeds DuckDB v2.0.0. Bundles are `duckdb-base.wasm` (33.7 MB) and `duckdb-browser-base.worker.js`. Extension platform `wasm_eh` |
+| Hosting | Cloudflare Workers static assets, at most 25 MiB a file. The deploy build fetches `duckdb-base.wasm` from jsDelivr at the installed version (identical bytes, served with CORS, 7.4 MB compressed); the worker stays bundled. Single-threaded, so no COOP or COEP headers |
 | Extensions with v2.0.0 wasm builds | `cityjson` and `three_d` (community), `spatial` and `parquet` (core) |
 | `httpfs` in wasm | Must not be loaded: range reads then fail with an ETag error. The built-in HTTP of duckdb-wasm works |
 | `cityparquet_read` | Refuses an HTTP URL. Use `read_parquet`, `parquet_kv_metadata` and `parquet_metadata` |
