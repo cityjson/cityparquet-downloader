@@ -232,8 +232,8 @@ Within the area, `oorspronkelijkbouwjaar < 1950` selects 123, and with
 ### Limits
 
 - A scope over 400,000 rows (`SELECTION_ROW_LIMIT`, six row groups of 3DBAG) is refused
-  with what looking at it would read. From the fitted view: 285 row groups, 18.7 million
-  rows, about 675 MB. Each row group's footprints cost 2.4 to 3.0 s and about 5 MB to
+  with what looking at it would read. From the fitted view: all 329 row groups, 21.6
+  million rows, about 790 MB. Each row group's footprints cost 2.4 to 3.0 s and about 5 MB to
   load, one after another, so six take about 20 s; the limit keeps a selection to what
   the map could draw.
 - Without an area the scope is the row groups in view, whole: zoomed to central Delft
