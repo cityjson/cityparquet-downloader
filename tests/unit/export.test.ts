@@ -3,7 +3,8 @@ import { type Chunk, type ChunkKey, chunksOf } from "@/core/chunk";
 import {
   exportFraction,
   checkRequest,
-  EXPORT_SIZE_LIMIT,
+  EXPORT_SIZE_LIMITS,
+  exportSizeLimit,
   type ExportRequest,
   estimateExport,
   exportColumns,
@@ -160,28 +161,18 @@ describe("estimateExport", () => {
     // Half the drawable rows are selected, so half of what is read is kept.
     expect(e.keptBytes).toBe(750);
     expect(e.tooLarge).toBe(false);
-    expect(e.parts).toBe(1);
     const big = estimateExport(
       [{ table, scope: chunksOf(table), selected: 100, drawable: 100 }],
       request(),
       1000,
     );
     expect(big.tooLarge).toBe(true);
-    expect(EXPORT_SIZE_LIMIT).toBeGreaterThan(0);
+    // Only the streamed formats, and only on disk, get the large limit.
+    expect(exportSizeLimit("cityjsonseq", true)).toBe(EXPORT_SIZE_LIMITS.streamed);
+    expect(exportSizeLimit("cityparquet", true)).toBe(EXPORT_SIZE_LIMITS.streamed);
+    expect(exportSizeLimit("cityjsonseq", false)).toBe(EXPORT_SIZE_LIMITS.held);
+    expect(exportSizeLimit("cityjson", true)).toBe(EXPORT_SIZE_LIMITS.held);
   });
-});
-
-test("a download in several parts is a zip of numbered files or packages", () => {
-  const part = { index: 1, count: 3 };
-  expect(outputLayout("cityjson", "delft", 1, part)).toMatchObject({
-    target: "/export/1/delft/delft-part-002.city.json",
-    download: "delft.zip",
-    zip: true,
-  });
-  expect(outputLayout("cityparquet", "delft", 1, part).target).toBe(
-    "/export/1/delft/delft-part-002/",
-  );
-  expect(outputLayout("obj", "delft", 1, part).target).toBe("/export/1/delft/delft-part-002.obj");
 });
 
 describe("transformOptions", () => {
@@ -211,7 +202,7 @@ describe("outputLayout", () => {
       zip: true,
     });
     expect(outputLayout("obj", "delft", 1)).toMatchObject({
-      target: "/export/1/delft/delft.obj",
+      target: "/export/1/delft.obj",
       download: "delft-obj.zip",
       zip: true,
     });
@@ -220,10 +211,15 @@ describe("outputLayout", () => {
 
 describe("writeSql", () => {
   const plan = planExport([{ table, scope: chunksOf(table) }], request(), 7);
+  const stage = (p: typeof plan) => [
+    { table: p.tables[0] as (typeof p.tables)[number], files: ["/export/7/stage/0.parquet"] },
+  ];
 
-  test("COPYs the union of the local tables with the CRS from the footer", () => {
-    const sql = writeSql(plan, { x: 1, y: 2, z: 3 });
-    expect(sql).toContain('COPY (SELECT * FROM "delft_centre"."building")');
+  test("COPYs the staged files with the CRS from the footer", () => {
+    const sql = writeSql(plan, stage(plan), { x: 1, y: 2, z: 3 });
+    expect(sql).toContain(
+      "COPY (SELECT * FROM read_parquet(['/export/7/stage/0.parquet'], union_by_name := true))",
+    );
     expect(sql).toContain("TO '/export/7/delft centre.city.jsonl'");
     expect(sql).toContain("FORMAT cityjsonseq");
     expect(sql).toContain("crs 'https://www.opengis.net/def/crs/EPSG/0/7415'");
@@ -236,7 +232,7 @@ describe("writeSql", () => {
       request({ format: "obj", tables: [{ name: "building", lods: ["2.2"], attributes: [] }] }),
       7,
     );
-    const sql = writeSql(obj, { x: 1, y: 2, z: 3 });
+    const sql = writeSql(obj, stage(obj), { x: 1, y: 2, z: 3 });
     expect(sql).toContain("FORMAT obj");
     expect(sql).toContain("lod '2.2'");
     expect(sql).not.toContain("transform");
@@ -248,7 +244,7 @@ describe("writeSql", () => {
       request({ format: "cityparquet" }),
       7,
     );
-    expect(writeSql(pkg, null)).toBe(
+    expect(writeSql(pkg, stage(pkg), null)).toBe(
       "SELECT file FROM cityparquet_write('delft_centre', '/export/7/delft centre/', crs => 'EPSG:7415')",
     );
   });
@@ -260,15 +256,13 @@ describe("writeSql", () => {
   });
 });
 
-test("exportFraction rises through the steps and the parts, and ends below 1", () => {
+test("exportFraction rises through the steps and ends below 1", () => {
   const steps = [
     exportFraction({ step: "expanding", done: 0, total: 4 }),
     exportFraction({ step: "expanding", done: 4, total: 4 }),
-    exportFraction({ step: "reading", done: 0, total: 0, part: 0, parts: 2 }),
-    exportFraction({ step: "reading", done: 1, total: 2, part: 0, parts: 2 }),
-    exportFraction({ step: "writing", part: 0, parts: 2 }),
-    exportFraction({ step: "reading", done: 0, total: 2, part: 1, parts: 2 }),
-    exportFraction({ step: "writing", part: 1, parts: 2 }),
+    exportFraction({ step: "reading", done: 0, total: 0 }),
+    exportFraction({ step: "reading", done: 1, total: 2 }),
+    exportFraction({ step: "writing" }),
   ];
   expect(steps[0]).toBe(0);
   expect(steps).toEqual([...steps].sort((a, b) => a - b));

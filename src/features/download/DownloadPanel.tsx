@@ -33,13 +33,6 @@ const SHAPE: Record<ExportFormat, string> = {
   obj: ".obj and .mtl, .zip",
 };
 
-/** `Part 2 of 7: reading…` when there are several parts, else `Reading…`. */
-function inPart(p: { part: number; parts: number }, doing: string): string {
-  return p.parts > 1
-    ? `Part ${p.part + 1} of ${p.parts}: ${doing}…`
-    : `${doing.charAt(0).toUpperCase()}${doing.slice(1)}…`;
-}
-
 function progressText(p: DownloadProgress, format: ExportFormat): string {
   switch (p.step) {
     case "preparing":
@@ -47,14 +40,11 @@ function progressText(p: DownloadProgress, format: ExportFormat): string {
     case "expanding":
       return `Finding the parts of features, row group ${Math.min(p.done + 1, p.total)} of ${p.total}…`;
     case "reading":
-      return inPart(
-        p,
-        p.total === 0
-          ? "reading"
-          : `reading row group ${Math.min(p.done + 1, p.total)} of ${p.total}`,
-      );
+      return p.total === 0
+        ? "Reading…"
+        : `Reading row group ${Math.min(p.done + 1, p.total)} of ${p.total}…`;
     case "writing":
-      return inPart(p, `writing ${formatLabel(format)}`);
+      return `Writing ${formatLabel(format)}…`;
     case "saving":
       return "Saving the file…";
   }
@@ -115,8 +105,8 @@ function RunState({ run, format }: { run: DownloadRun; format: ExportFormat }) {
     case "done":
       return (
         <p role="status" className="text-xs" data-testid="download-result">
-          Saved {run.name}: {formatBytes(run.bytes)}, {formatCount(run.rows)} city objects
-          {run.parts > 1 ? ` in ${run.parts} parts` : ""}, in {run.seconds.toFixed(1)} s.
+          Saved {run.name}: {formatBytes(run.bytes)}, {formatCount(run.rows)} city objects, in{" "}
+          {run.seconds.toFixed(1)} s.
         </p>
       );
     case "cancelled":
@@ -310,11 +300,7 @@ export function DownloadPanel() {
         <p className="text-xs tabular-nums" data-testid="download-estimate">
           Reads up to {formatBytes(estimate.readBytes)} from {formatCount(estimate.rowGroups)} row{" "}
           {estimate.rowGroups === 1 ? "group" : "groups"}. The selection is about{" "}
-          {formatBytes(estimate.keptBytes)} of that
-          {estimate.parts > 1
-            ? `, written as about ${formatCount(estimate.parts)} parts in one zip`
-            : ""}
-          .
+          {formatBytes(estimate.keptBytes)} of that.
         </p>
       )}
       {prepared.problem && !busy && (

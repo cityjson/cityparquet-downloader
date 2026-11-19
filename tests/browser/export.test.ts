@@ -72,21 +72,23 @@ async function seed(table: PackageTable, ids: readonly string[]): Promise<Chunk[
 const direct: ExportExec = async (_progress, work) => work(await getEngine());
 
 let run = 100;
-/** Runs a download of the case; returns what it wrote. The local schema is dropped after. */
+/**
+ * Runs a download of the case; returns what it wrote. The local schema is dropped after.
+ * It is written on disk, as the app writes it, unless `under` says where.
+ */
 async function download(
   info: PackageInfo,
   scopes: Record<string, Chunk[]>,
   request: ExportRequest,
-  partBytes?: number,
+  under?: string,
 ): Promise<ExportResult & { root: string; target: string }> {
   const inputs = info.tables
     .filter((t) => scopes[t.name])
     .map((table) => ({ table, scope: scopes[table.name] ?? [] }));
-  const plan = planExport(inputs, request, run++);
   const engine = await getEngine();
+  const plan = planExport(inputs, request, run++, under ?? `${engine.scratch}/export`);
   try {
-    const result = await runExport(plan, direct, undefined, undefined, partBytes);
-    return { ...result, ...result.layout };
+    return { ...(await runExport(plan, direct)), ...plan.layout };
   } finally {
     for (const s of cleanupSql(plan)) await engine.exec(s);
   }
@@ -140,7 +142,7 @@ describe("downloads of the Delft fixture", () => {
   const request = (format: ExportFormat): ExportRequest => ({
     tables: [{ name: "building", lods: ["2.2"], attributes: t.attributes }],
     format,
-    fileName: "delft subset",
+    fileName: "delft-subset",
   });
 
   beforeAll(async () => {
@@ -179,42 +181,6 @@ describe("downloads of the Delft fixture", () => {
     },
   );
 
-  test.each(["cityjsonseq", "cityparquet"] as const)(
-    "%s in parts: every part is complete, no feature is split and none is lost",
-    async (format) => {
-      // Well under the selection's bytes per part.
-      const table = info.tables.find((x) => x.name === "building") as PackageTable;
-      const bytes = scope.reduce((n, c) => {
-        const g = table.rowGroups.find((r) => r.file === c.file && r.index === c.index);
-        return n + ((g?.bytes ?? 0) * t.ids.length) / (g?.rows ?? 1);
-      }, 0);
-      const out = await download(info, { building: scope }, request(format), bytes / 10);
-      expect(out.parts).toBeGreaterThan(1);
-      expect(out.rows).toEqual({ building: t.ids.length });
-      expect(out.layout.zip).toBe(true);
-      const engine = await getEngine();
-      const targets = Array.from({ length: out.parts }, (_, i) =>
-        out.target.replace("-part-001", `-part-${String(i + 1).padStart(3, "0")}`),
-      );
-      const read = (target: string) =>
-        format === "cityparquet"
-          ? `read_parquet('${target}building.parquet')`
-          : `read_cityjsonseq('${target}')`;
-      const all = targets.map((x, i) => `SELECT ${i} AS part, id, feature_id FROM ${read(x)}`);
-      const rows = await engine.query(
-        `SELECT id, part, feature_id FROM (${all.join(" UNION ALL ")}) ORDER BY id`,
-      );
-      expect(rows.map((r) => r.id)).toEqual(t.ids);
-      const partsOf = new Map<string, Set<number>>();
-      for (const r of rows) {
-        const key = String(r.feature_id);
-        partsOf.set(key, (partsOf.get(key) ?? new Set()).add(Number(r.part)));
-      }
-      expect([...partsOf.values()].every((p) => p.size === 1)).toBe(true);
-      await engine.dropFiles(out.files);
-    },
-  );
-
   test("obj: the parts with LoD 2.2 geometry, a .mtl beside it, the CRS in its header", async () => {
     const out = await download(info, { building: scope }, request("obj"));
     expect(out.files.sort()).toEqual([out.target, out.target.replace(/\.obj$/, ".mtl")].sort());
@@ -223,13 +189,31 @@ describe("downloads of the Delft fixture", () => {
       `SELECT id FROM read_obj('${out.target}', lod := '2.2') ORDER BY id`,
     );
     expect(ids.map((r) => r.id)).toEqual(t.lodIds["2.2"]);
-    const text = new TextDecoder().decode(await engine.readFile(out.target));
+    const text = await (await engine.openFile(out.target)).text();
     expect(text).toMatch(/^# crs https:\/\/www\.opengis\.net\/def\/crs\/EPSG\/0\/7415$/m);
     await engine.dropFiles(out.files);
   });
 
-  test("cityparquet: a valid package with the source footer, LoD 2.2 only", async () => {
+  test("cityparquet on disk: the package's files, with every row", async () => {
     const out = await download(info, { building: scope }, request("cityparquet"));
+    expect(out.target.startsWith("opfs://")).toBe(true);
+    expect(out.files.map((f) => f.slice(out.target.length)).sort()).toEqual([
+      "building.parquet",
+      "metadata.json",
+    ]);
+    const engine = await getEngine();
+    const [n] = await engine.query(
+      `SELECT count(*)::INTEGER AS n FROM read_parquet('${out.target}building.parquet')`,
+    );
+    expect(n?.n).toBe(t.ids.length);
+    expect((await engine.openFile(`${out.target}metadata.json`)).size).toBeGreaterThan(100);
+    await engine.dropFiles([...out.files, ...out.staged]);
+  });
+
+  test("cityparquet: a valid package with the source footer, LoD 2.2 only", async () => {
+    // In memory: `cityparquet_read` takes a directory, and duckdb-wasm opens a file on
+    // disk only when the query names it.
+    const out = await download(info, { building: scope }, request("cityparquet"), "/export");
     expect(out.files.map((f) => f.slice(out.target.length)).sort()).toEqual([
       "building.parquet",
       "metadata.json",
@@ -336,7 +320,7 @@ describe("downloads of Chuo-ku, two tables", () => {
   });
 
   test("cityparquet: one file per table, valid, each with its footer", async () => {
-    const out = await download(info, scopes, request("cityparquet", ["2.0"]));
+    const out = await download(info, scopes, request("cityparquet", ["2.0"]), "/export");
     expect(out.files.map((f) => f.slice(out.target.length)).sort()).toEqual([
       "bridge.parquet",
       "building.parquet",

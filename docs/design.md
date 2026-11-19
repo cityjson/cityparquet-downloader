@@ -139,13 +139,13 @@ A Download section in the side panel writes the selection (`src/core/export.ts`,
   selected building brings its parts. A feature's rows are contiguous, so the `feature_id`
   column is read for the scope's row groups only, plus the row group beside one whose
   first or last row is wanted.
-- Steps (`runExport`): snapshot `selection_rows`; complete the features; read the chosen
-  columns of those rows, one row group at a time by `file_row_number`, into a local schema
-  named like a package; `cityparquet_init`, then restore each table's source `city`
-  footer, so CRS, transform and source metadata carry over; write with the `cityjson`
-  extension: `cityparquet_write` for a package, one `COPY … (FORMAT …)` over the union of
-  the tables otherwise, built with cjconv-core. The local schema and the virtual files are
-  dropped afterwards, whatever happened.
+- Steps (`runExport`): snapshot `selection_rows`; complete the features; stage the chosen
+  columns of those rows, one row group at a time by `file_row_number`; write with the
+  `cityjson` extension: one `COPY … (FORMAT …)` over the staged files of every table,
+  built with cjconv-core, or for a package the staged files as tables of a local schema
+  named like a package, `cityparquet_init`, each table's source `city` footer restored
+  (so CRS, transform and source metadata carry over) and `cityparquet_write`. The local
+  schema and the files are dropped afterwards, whatever happened.
 - Writer options the extension needs stated (findings.md): `crs => AUTH:CODE` for a
   package, `crs` for the file formats, the footer's transform scale with the data's
   minimum corner as translate for the CityJSON family.
@@ -153,14 +153,18 @@ A Download section in the side panel writes the selection (`src/core/export.ts`,
   it has taken, and can be cancelled between units of work. The panel shows what
   it reads (the chosen columns of the scope's row groups) and keeps (their selected
   share).
-- A download is written in parts of about 8 MB of compressed columns (`EXPORT_PART_BYTES`),
-  because DuckDB's wasm heap ends at 4 GiB and writing takes 45 to 85 times what it
-  keeps. The rows are cut in file order and a feature is never split (`partsSql`). Each
-  part is read, written and moved out of the engine before the next, into a zip built
-  outside DuckDB's memory. One part downloads as the file or package itself; several as a
-  zip of complete files or packages named `<name>-part-001`, `-002`, …. A download that
-  keeps more than 250 MB (`EXPORT_SIZE_LIMIT`), about 1 GB of files, is refused, with its
-  numbers: the zip is held by the browser and cannot pass 4 GiB.
+- A download is one file: the format's own file, or a zip of a package directory or of an
+  OBJ with its `.mtl`. The wanted rows are staged one row group at a time as Parquet files
+  (`stageSql`) and written once from them (`writeSql`). With the origin private file
+  system (OPFS) the staged files, the output and what DuckDB spills
+  (`temp_directory`, `memory_limit` 1.5 GB) are on disk, under
+  `opfs://cityparquet-downloader`, emptied before each download and at start-up; the saved
+  file is handed to the browser as it lies on disk. Without OPFS everything is in memory.
+- A download that keeps more than its format's limit is refused, with its numbers
+  (`exportSizeLimit`): 170 MB of compressed columns for CityJSONSeq and CityParquet on
+  disk, 20 MB otherwise. The CityJSON, FlatCityBuf and OBJ writers hold the whole output
+  in the wasm heap, which ends at 4 GiB; the refusal names the two formats that go
+  further.
 - Sidecars (`materials`, `textures`, `implicit_geometries`) are not written. Neither
   public package (3DBAG, Chuo-ku) has one.
 
