@@ -20,7 +20,7 @@ import { useSelection } from "@/features/selection/store";
 import { usePackage } from "@/features/source/store";
 import { useTheme } from "@/lib/theme";
 import { loadLog, placePackage, setView, useMapData } from "./footprints";
-import { useLegend } from "./legend";
+import { useLegend } from "./legendStore";
 import { setMap } from "./map";
 import { closePopup, openPopup, pickedFrom, usePopup } from "./popup";
 import {
