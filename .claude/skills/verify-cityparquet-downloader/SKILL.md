@@ -102,6 +102,8 @@ page, and disconnects. The page keeps its state between calls.
 | `control browser eval --js "document.title"` | Runs read-only JavaScript, prints JSON |
 | `control browser snapshot [--path name.aria.txt]` | Saves the URL, title and ARIA tree |
 | `control browser screenshot [--path name.png]` | Saves a screenshot |
+| `control browser download --role button --name Download --exact true [--path folder]` | Clicks, saves the file the page downloads into the evidence directory, prints its size, the seconds and the peak resident memory of the run's Chromium |
+| `control browser memory` | Prints the resident memory of the run's Chromium now |
 
 Targets are `--role` with an optional `--name`, `--label`, `--text` or `--testid`.
 Prefer roles and visible text. The page's stable handles today:
@@ -126,7 +128,13 @@ Prefer roles and visible text. The page's stable handles today:
   current view`, `Clear area`; while drawing, a `status` hint with `Finish` and `Cancel`,
 - heading `Selection`: test id `selection-area` (`Area: drawn, N corners.` or `Area: none.
   …`) and per table a `status` with test id `selection-<table>`: `N of M features
-  selected, about X to download.`,
+  selected.`,
+- region `Download`: combobox `Format`, checkboxes `LoD <l>` (for OBJ the radio group
+  `Level of detail`), per table the button `Attributes of <table>` (a popup with `Search
+  attributes`, `Select all`, `Select none` and checkboxes `Download <attribute>`) and test
+  id `download-<table>`, the textbox `File name`, test ids `download-estimate` and
+  `download-problem` (role `alert`), the button `Download` (or `Cancel download`), then
+  test id `download-progress` while it runs and `download-result` after,
 - region `Feature table` below the map: heading `Features`, the separator `Resize the
   table`, the tab list `Tables` with one tab per table, `Hide table` (or `Show table`);
   per tab the test id `table-scope`, the button `Columns` (`Columns N of M`), the region
@@ -189,5 +197,9 @@ name) and removes `.verify/runs/<run>/`, including the browser profile. It keeps
 
 ## Helpers
 
-- `scripts/control.mjs` is the only helper. Its commands are the ones above; all take
-  `--run <name>`.
+- `scripts/control.mjs` drives the page. Its commands are the ones above; all take
+  `--run <name>`. `control launch --preview` serves the production build in `dist/`
+  (`just build` first) instead of the dev server; its package is the one fixed at build
+  time, and `window.__map` does not exist there.
+- `scripts/check-download.py` checks a downloaded file outside the browser, with native
+  DuckDB (Python `duckdb` 2.0 and the network): see [features/download.md](features/download.md).

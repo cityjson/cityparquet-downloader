@@ -18,6 +18,16 @@ build:
     pnpm exec tsc --noEmit
     pnpm exec vite build
 
+# The build Cloudflare serves: the engine's wasm from jsDelivr, every file under 25 MiB.
+build-deploy:
+    pnpm exec tsc --noEmit
+    VITE_DUCKDB_CDN=1 pnpm exec vite build
+    node scripts/check-asset-sizes.mjs dist
+
+# Deploy to Cloudflare Workers (wrangler.jsonc). Needs `wrangler login` or CLOUDFLARE_API_TOKEN.
+deploy: build-deploy
+    pnpm dlx wrangler@4.157.0 deploy
+
 # Format check, lint and type check. Changes nothing.
 check:
     pnpm exec biome ci .

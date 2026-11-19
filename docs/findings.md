@@ -241,6 +241,95 @@ Within the area, `oorspronkelijkbouwjaar < 1950` selects 123, and with
 - A value box with a `list` attribute (the datalist of a text column's values) has the
   role `combobox`, not `textbox`.
 
+## Downloads on 3DBAG
+
+Measured with the verification skill: `control browser download` saves the file and
+samples the resident memory of the run's Chromium every 250 ms, and the recorder counts
+the bytes. Every file is then checked outside the browser by
+`.claude/skills/verify-cityparquet-downloader/scripts/check-download.py`, which
+recomputes the selection's whole features from the source package with native DuckDB
+and compares ids, CRS, LoDs and attributes.
+
+### Small selections
+
+The fixture tests' pentagon in central Delft, over row groups 70, 71 and 96:
+
+| Selection | Format, LoDs, attributes | Objects | File | Time | Read from the host |
+| --- | --- | --- | --- | --- | --- |
+| 196 buildings | CityJSON, LoD 2.2, all 62 | 392 | 1.1 MB | 11.4 s | 33.2 MB in 7 GETs |
+| the same, next | FlatCityBuf, every LoD, all 62 | 392 | 1.0 MB | 7.6 s | 21.2 MB in 3 GETs |
+| 122 buildings (`oorspronkelijkbouwjaar < 1950`) | CityJSONSeq, LoD 2.2, 3 | 244 | 542 kB | 7.8 s | 29.3 MB in 6 GETs |
+| the same, next | CityParquet, LoD 2.2, 3 | 244 | 343 kB | 4.6 s | 2.7 kB, no GET |
+
+Every file holds exactly the expected objects: each selected building with its
+`BuildingPart` rows, in EPSG:7415. A download right after another reads only the columns
+the first did not, which suggests duckdb-wasm keeps the ranges it read (inferred from the
+requests, not from its code).
+
+Cancelling while features are completed stops after the running row group (14 requests
+and 1.6 MB after the click), and the next download runs normally.
+
+### Memory and the size limit
+
+The guard refuses a download that keeps more than 20 MB (`EXPORT_SIZE_LIMIT`): the
+compressed bytes of the chosen columns, in the selected share of the scope's row groups.
+DuckDB's wasm heap cannot grow past 4 GiB. Views of Delft taken as the area, every LoD
+and attribute, one fresh page each:
+
+| Selected (objects) | Kept | Format | File | Time | Read | Largest process, before and peak |
+| --- | --- | --- | --- | --- | --- | --- |
+| 306 (616) | 394 kB | CityJSONSeq | 2.5 MB | 8.8 s | 54 MB | 1,235 and 1,492 MiB |
+| 5,464 (10,934) | 6.8 MB | CityJSONSeq | 32.7 MB | 28.4 s | 83 MB | 1,283 and 1,744 MiB |
+| 15,430 (30,886) | 19.3 MB | CityJSONSeq | 83.7 MB | 50.6 s | 133 MB | 1,383 and 2,402 MiB |
+| 15,430 (30,886) | 19.3 MB | CityParquet | 38.1 MB | 46.0 s | 133 MB | 1,326 and 2,174 MiB |
+| 15,430 (30,886) | 19.3 MB | CityJSON | 94.6 MB | 46.9 s | 133 MB | 1,485 and 3,019 MiB |
+
+The largest process is the renderer, which holds the page and DuckDB's worker. A download
+adds 45 (CityParquet) to 85 (CityJSON) times what it keeps, so at 19.3 MB CityJSON
+reaches 3.0 GiB. The limit keeps the worst format's peak about 1 GiB under 4 GiB.
+Without an area, the four row groups in view at footprint zoom (131,009 buildings) keep
+164 MB and are refused, with the Download button disabled.
+
+## What the writers need from the extension
+
+Each of these is a gap in the `cityjson` extension (community build v0.5.0 for DuckDB
+2.0.0), found in the browser and reproduced with native DuckDB. The app passes the
+options that avoid it; the fix belongs upstream.
+
+### `metadata_from` on a Parquet file writes no metadata
+
+`COPY … TO 'out.city.json' (FORMAT cityjson, metadata_from 'building.parquet')` writes a
+document with no `metadata` at all, so no `referenceSystem`. The CityJSON family is
+written with `crs` instead (cjconv-core's `crsToUri` of the PROJJSON `id`), and its
+`metadata` holds the reference system and nothing else from the source.
+
+### `cityparquet_write` misreads a carried PROJJSON CRS
+
+`PRAGMA cityparquet_read('fixtures/chuo-ku', 'p')` and then `cityparquet_write('p',
+'out/')` write Chuo-ku's EPSG:6697 (JGD2011 + JGD2011 height) as EPSG:2011, NAD27(CGQ77) /
+SCoPQ zone 5. With `crs => 'EPSG:6697'` the footer is right. The app always passes `crs
+=> AUTH:CODE` to `cityparquet_write`.
+
+### The vertex transform
+
+The CityJSON writers default to scale 0.001 and translate 0. In degrees that is about
+100 m: 50 Chuo-ku buildings, 328 vertices, come out with 4 distinct x values. Chuo-ku's
+footer carries its source's transform (`city.other.transform`), scale `1e-9, 1e-9, 0.001`
+with a translate whose first value is a latitude (35.51), while x is a longitude (139.78).
+Used as is, x quantises to integers near 1.04e11. A CityJSON file still reads back; a
+FlatCityBuf file is written without an error and reads back with `xmin` 36.71 instead of
+139.78. The app passes the footer's scale and the data's minimum corner as
+`transform_translate`.
+
+### Whole features
+
+The extension has no read by feature. The rows of a feature are contiguous in its table,
+but a row group of fixed size can cut one. The app reads `feature_id` for the scope's row
+groups by `file_row_number`, keeps every row sharing one with a selected row, and reads
+the row group beside one whose first or last row is wanted. `tests/browser/export.test.ts`
+proves it on the fixture rewritten into 102 row groups, where 16 features cross a
+boundary.
+
 ## Other facts later phases need
 
 - `Engine.query` returns plain JSON. A BLOB (an MVT tile, a WKB geometry) comes back as an

@@ -9,8 +9,7 @@
 //   filters   the applied filter per table (absent: none)
 //   tables    per table, a TableSelection: `ready` carries `selection` (the Selection),
 //             `scope` (its row groups, as `{ chunk, id }`, each chunk with its `file`,
-//             `fileIndex`, `index`, `start` and `rows`), `count` and `bytes`, the estimated
-//             compressed bytes of a full download of the selected rows
+//             `fileIndex`, `index`, `start` and `rows`) and `count`
 //   active    whether an area or a filter narrows anything (the map dims the rest)
 //   revision  bumps each time `selection_rows` is rewritten
 //
@@ -59,8 +58,6 @@ export type TableSelection =
       scope: Scope;
       plan: ReadyPlan;
       count: number;
-      /** Estimated compressed bytes of a download of the selected rows, all columns. */
-      bytes: number;
     }
   | { state: "failed"; selection: Selection; scope: Scope; message: string };
 
@@ -270,7 +267,6 @@ async function evaluate(): Promise<void> {
         scope,
         plan,
         count,
-        bytes: estimateBytes(scopeRowGroups(table.rowGroups, scope.chunks), count),
       });
     }
     if (!signal.aborted) useSelection.setState((s) => ({ revision: s.revision + 1 }));

@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: extractions/setup-just@v4.0.0
+      - run: just install
+      # The engine's wasm from jsDelivr, then every file in dist/ checked against 25 MiB.
+      - run: just build-deploy
+        env:
+          VITE_CITYPARQUET_URL: ${{ vars.VITE_CITYPARQUET_URL }}
+          VITE_CARTO_KEY: ${{ vars.VITE_CARTO_KEY }}
+      # Secrets cannot be read in an `if`, so a step reads them from its environment.
+      - id: credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not set. The build was made and checked, not deployed."
+          fi
+      - if: steps.credentials.outputs.present == 'true'
+        uses: cloudflare/wrangler-action@v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.157.0"
+          command: deploy

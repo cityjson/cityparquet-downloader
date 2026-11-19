@@ -1,7 +1,6 @@
-// The selection in the side panel: the area, and per table what is selected and roughly
-// what a download of it would read.
+// The selection in the side panel: the area, and per table what is selected.
 import { useMapData } from "@/features/map/footprints";
-import { formatBytes, formatCount } from "@/features/source/format";
+import { formatCount } from "@/features/source/format";
 import { usePackage } from "@/features/source/store";
 import { describeScope, featuresInScope } from "./describe";
 import { useSelection } from "./store";
@@ -36,7 +35,7 @@ export function SelectionSummary() {
                   data-testid={`selection-${t.name}`}
                 >
                   {formatCount(s.count)} of {formatCount(featuresInScope(s, cache))} features
-                  selected, about {formatBytes(s.bytes)} to download.
+                  selected.
                 </p>
               ) : (
                 <p

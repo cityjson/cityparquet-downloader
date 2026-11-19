@@ -1,7 +1,6 @@
 // The one place that talks to duckdb-wasm. Everything else sends SQL through `Engine`.
 import type { Engine, Row } from "@cityjson/cjconv-core";
 import * as duckdb from "@duckdb/duckdb-wasm";
-import baseWasm from "@duckdb/duckdb-wasm/dist/duckdb-base.wasm?url";
 import baseWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-base.worker.js?url";
 
 export interface BrowserEngine extends Engine {
@@ -24,6 +23,18 @@ export interface BrowserEngine extends Engine {
 const CORE_EXTENSIONS = ["parquet", "spatial"];
 const COMMUNITY_EXTENSIONS = ["cityjson", "three_d"];
 
+/**
+ * The engine's wasm. Cloudflare Workers serve static assets of at most 25 MiB and
+ * `duckdb-base.wasm` is 33.7 MB, so a build with `VITE_DUCKDB_CDN=1` fetches it from
+ * jsDelivr at the installed duckdb-wasm version, which the bundled worker matches;
+ * otherwise it is bundled. The worker stays same-origin either way.
+ */
+async function wasmUrl(): Promise<string> {
+  if (import.meta.env.VITE_DUCKDB_CDN === "1")
+    return `https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@${__DUCKDB_WASM_VERSION__}/dist/duckdb-base.wasm`;
+  return (await import("@duckdb/duckdb-wasm/dist/duckdb-base.wasm?url")).default;
+}
+
 /** Arrow rows → plain JSON values: BIGINT becomes number, STRUCT and LIST plain objects. */
 function toRows(table: { toArray(): { toJSON(): unknown }[] }): Row[] {
   return table
@@ -42,7 +53,7 @@ export async function createEngine(): Promise<BrowserEngine> {
   const worker = new Worker(baseWorker);
   const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
   try {
-    await db.instantiate(baseWasm);
+    await db.instantiate(await wasmUrl());
     // Range reads only, all three flags explicit. This build's defaults force whole-file
     // HTTP reads (a plain HEAD, then a GET with no Range), which for a national package
     // (14 GB) exhausts the tab's memory. A server without range support is an error.

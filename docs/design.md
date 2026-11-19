@@ -28,6 +28,7 @@ record it in `docs/findings.md`; do not work around it here.
 | Fact | Value |
 | --- | --- |
 | duckdb-wasm | `1.33.1-dev118.0` embeds DuckDB v2.0.0. Bundles are `duckdb-base.wasm` (33.7 MB) and `duckdb-browser-base.worker.js`. Extension platform `wasm_eh` |
+| Hosting | Cloudflare Workers static assets, at most 25 MiB a file. The deploy build fetches `duckdb-base.wasm` from jsDelivr at the installed version (identical bytes, served with CORS, 7.4 MB compressed); the worker stays bundled. Single-threaded, so no COOP or COEP headers |
 | Extensions with v2.0.0 wasm builds | `cityjson` and `three_d` (community), `spatial` and `parquet` (core) |
 | `httpfs` in wasm | Must not be loaded: range reads then fail with an ETag error. The built-in HTTP of duckdb-wasm works |
 | `cityparquet_read` | Refuses an HTTP URL. Use `read_parquet`, `parquet_kv_metadata` and `parquet_metadata` |
@@ -114,8 +115,7 @@ LoD 0 footprint, or, in a table without one, a `bbox`.
 - Evaluated, the selection is written to `selection_rows (tbl, file, row)`: `file` is the
   position in the table's `files`, `row` the `file_row_number`. Tiles carry `sel` from a
   join on it, and the map dims what is not selected. The side panel shows, per table, the
-  count and an estimate of the compressed bytes a full download reads (`estimateBytes`:
-  the scope's row-group bytes in proportion to the rows selected).
+  count; what a download reads and keeps is in the Download section.
 
 ### Table
 
@@ -128,13 +128,33 @@ brings it into view; a footprint click marks its row when it is on the page.
 
 ### Download
 
-- Formats: CityParquet (zip), CityJSON, CityJSONSeq, FlatCityBuf, OBJ (zip).
-- LoDs: any subset the package has. Attributes: any subset; reserved columns are kept.
-- Selected rows and chosen columns are read from the remote files into a local schema,
-  the footer metadata is restored, and the `cityjson` extension writes the output.
-- Whole features: children and parents of selected objects are included by `feature_id`.
-- Sidecars (`materials`, `textures`, `implicit_geometries`) are filtered to referenced rows.
-- A guard refuses a selection whose estimated size will not fit in browser memory.
+A Download section in the side panel writes the selection (`src/core/export.ts`,
+`src/features/download/`).
+
+- Formats: CityParquet (a package directory, zipped), CityJSON, CityJSONSeq, FlatCityBuf,
+  and OBJ with its `.mtl` (zipped). An OBJ holds one LoD; a table without it is left out.
+- LoDs: any subset the package has. Attributes: any subset per table, with search and
+  select all or none. Reserved columns are kept (cjconv-core's column selection).
+- Whole features: every row sharing a `feature_id` with a selected row is written, so a
+  selected building brings its parts. A feature's rows are contiguous, so the `feature_id`
+  column is read for the scope's row groups only, plus the row group beside one whose
+  first or last row is wanted.
+- Steps (`runExport`): snapshot `selection_rows`; complete the features; read the chosen
+  columns of those rows, one row group at a time by `file_row_number`, into a local schema
+  named like a package; `cityparquet_init`, then restore each table's source `city`
+  footer, so CRS, transform and source metadata carry over; write with the `cityjson`
+  extension: `cityparquet_write` for a package, one `COPY … (FORMAT …)` over the union of
+  the tables otherwise, built with cjconv-core. The local schema and the virtual files are
+  dropped afterwards, whatever happened.
+- Writer options the extension needs stated (findings.md): `crs => AUTH:CODE` for a
+  package, `crs` for the file formats, the footer's transform scale with the data's
+  minimum corner as translate for the CityJSON family.
+- A run shows its step and can be cancelled between units of work. The panel shows what
+  it reads (the chosen columns of the scope's row groups) and keeps (their selected
+  share). A download that keeps more than 20 MB (`EXPORT_SIZE_LIMIT`, measured on 3DBAG)
+  is refused, with its numbers.
+- Sidecars (`materials`, `textures`, `implicit_geometries`) are not written. Neither
+  public package (3DBAG, Chuo-ku) has one.
 
 ### Coordinate systems
 
