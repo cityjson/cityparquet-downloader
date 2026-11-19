@@ -3,8 +3,9 @@
 // Chromium per run, both started here and only ever stopped by pid.
 //
 //   control.mjs launch [--source <package URL>] | doctor | cleanup
+//   control.mjs launch --preview          the production build in dist/, served by vite preview
 //   control.mjs browser <goto|click|hover|drag|wheel|fill|select|press|wait|text|snapshot|
-//                        screenshot|eval|map-view|map-at> [--flags]
+//                        screenshot|eval|map-view|map-at|download> [--flags]
 //   control.mjs network <mark|summary> [--host <name>]
 //
 // Every command takes --run <name> (default "default"); runs with different names can
@@ -76,6 +77,38 @@ const fail = (message) => {
   process.exit(1);
 };
 
+/** Resident memory in bytes of `root` and every process below it, from /proc (Linux). */
+function residentTree(root) {
+  const parent = new Map();
+  for (const pid of fs.readdirSync("/proc").filter((d) => /^\d+$/.test(d))) {
+    try {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+      parent.set(Number(pid), Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]));
+    } catch {
+      // gone
+    }
+  }
+  const inTree = (pid) => {
+    for (let p = pid; p > 1; p = parent.get(p) ?? 0) if (p === root) return true;
+    return false;
+  };
+  let total = 0;
+  let largest = 0;
+  for (const pid of parent.keys()) {
+    if (!inTree(pid)) continue;
+    try {
+      const kb = Number(
+        /VmRSS:\s+(\d+)/.exec(fs.readFileSync(`/proc/${pid}/status`, "utf8"))?.[1] ?? 0,
+      );
+      total += kb * 1024;
+      largest = Math.max(largest, kb * 1024);
+    } catch {
+      // gone
+    }
+  }
+  return { total, largest };
+}
+
 async function launch() {
   const existing = readState();
   if (
@@ -92,10 +125,16 @@ async function launch() {
 
   const source = flags.source ?? DEFAULT_SOURCE;
   const viteLog = fs.openSync(path.join(runDir, "vite.log"), "w");
+  // --preview serves the production build in dist/ (`just build` first), whose package
+  // URL was fixed when it was built; otherwise the dev server, with --source.
+  const preview = flags.preview === "true";
+  if (preview && !fs.existsSync(path.join(repo, "dist/index.html")))
+    fail("no dist/: run just build");
   const vite = spawn(
     process.execPath,
     [
       path.join(repo, "node_modules/vite/bin/vite.js"),
+      ...(preview ? ["preview"] : []),
       "--host",
       "127.0.0.1",
       "--port",
@@ -132,7 +171,8 @@ async function launch() {
   const state = {
     run,
     url,
-    source,
+    source: preview ? "(fixed in the build)" : source,
+    preview,
     port,
     cdpPort,
     vitePid: vite.pid,
@@ -321,6 +361,54 @@ async function browser() {
       }
       case "eval":
         console.log(JSON.stringify(await page.evaluate(flags.js), null, 2));
+        break;
+      case "download": {
+        // Clicks the target, waits for the file the page saves, and keeps it in the
+        // evidence directory (--path names a folder there). Meanwhile it samples the
+        // resident memory of this run's Chromium, every process together and the largest
+        // (the renderer the page and DuckDB's worker run in), and prints the peaks.
+        const started = Date.now();
+        let peak = { total: 0, largest: 0 };
+        const sampler = setInterval(() => {
+          const now = residentTree(state.chromePid);
+          peak = {
+            total: Math.max(peak.total, now.total),
+            largest: Math.max(peak.largest, now.largest),
+          };
+        }, 250);
+        try {
+          const [download] = await Promise.all([
+            page.waitForEvent("download", { timeout }),
+            target().click({ timeout }),
+          ]);
+          const file = path.resolve(
+            evidenceDir,
+            flags.path ?? "downloads",
+            download.suggestedFilename(),
+          );
+          fs.mkdirSync(path.dirname(file), { recursive: true });
+          await download.saveAs(file);
+          console.log(
+            JSON.stringify(
+              {
+                file: path.relative(repo, file),
+                bytes: fs.statSync(file).size,
+                seconds: (Date.now() - started) / 1000,
+                peakResidentMiB: Math.round(peak.total / 2 ** 20),
+                peakLargestProcessMiB: Math.round(peak.largest / 2 ** 20),
+              },
+              null,
+              2,
+            ),
+          );
+        } finally {
+          clearInterval(sampler);
+        }
+        break;
+      }
+      case "memory":
+        // The resident memory of this run's Chromium now, all processes and the largest.
+        console.log(JSON.stringify(residentTree(state.chromePid)));
         break;
       // Reads the map through window.__map (dev builds only): `map-view` prints the camera,
       // `map-at --lon --lat` the page pixel of a point, for `click` and `wheel`.

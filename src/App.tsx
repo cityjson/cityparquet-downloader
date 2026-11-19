@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useEngineStatus } from "@/engine/session";
+import { DownloadPanel } from "@/features/download/DownloadPanel";
 import { FeaturePopup } from "@/features/map/FeaturePopup";
 import { Legend } from "@/features/map/Legend";
 import { MapStatus } from "@/features/map/MapStatus";
@@ -65,6 +66,7 @@ export function App() {
           <PackageSummary />
           <MapStatus />
           <SelectionSummary />
+          <DownloadPanel />
           <Legend />
         </aside>
       )}
