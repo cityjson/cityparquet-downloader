@@ -1,7 +1,7 @@
 // The download: what the user chose (format, LoDs, attributes, file name), the request
 // and estimate that follow from it and the selection, and one run at a time of the
 // export, from the selection to a file the browser saves.
-import { zipSync } from "fflate";
+import { Zip, ZipPassThrough } from "fflate";
 import { create } from "zustand";
 import {
   checkRequest,
@@ -46,7 +46,7 @@ export type DownloadRun =
   | { state: "idle" }
   /** `fraction`: how far it is, 0 to 1, never going back; `started`: `performance.now()` then. */
   | { state: "running"; progress: DownloadProgress; fraction: number; started: number }
-  | { state: "done"; name: string; bytes: number; rows: number; seconds: number }
+  | { state: "done"; name: string; bytes: number; rows: number; parts: number; seconds: number }
   | { state: "cancelled" }
   | { state: "failed"; message: string };
 
@@ -191,37 +191,47 @@ export async function startDownload(): Promise<void> {
       return withEngine(work, { priority: "background", signal });
     };
     try {
-      const result = await runExport(plan, exec, signal);
-      const { files } = result;
-      step({ step: "saving" }, 0.97);
-      const blob = await withEngine(
-        async (engine) => {
-          const read = async (f: string) => {
-            const bytes = await engine.readFile(f);
-            // A writer that bypassed DuckDB's file system leaves the target empty.
-            if (bytes.byteLength <= 1) throw new Error(`The writer left ${f} empty.`);
-            return bytes;
-          };
-          if (!plan.layout.zip) {
-            const [only] = files;
-            if (!only || files.length !== 1)
-              throw new Error(`Expected one file, got ${files.length}.`);
-            return new Blob([(await read(only)) as Uint8Array<ArrayBuffer>]);
-          }
-          const entries: Record<string, Uint8Array> = {};
-          const folder = plan.layout.download.replace(/(-obj)?\.zip$/, "");
-          for (const f of files) entries[`${folder}/${f.split("/").at(-1)}`] = await read(f);
-          // Parquet is compressed already; level 0 only stores.
-          return new Blob([zipSync(entries, { level: 0 }) as Uint8Array<ArrayBuffer>], {
-            type: "application/zip",
-          });
+      // The download as it is built, outside DuckDB's memory: the one file, or the zip.
+      const pieces: Blob[] = [];
+      let zip: Zip | null = null;
+      const result = await runExport(
+        plan,
+        exec,
+        async (files, layout) => {
+          await withEngine(
+            async (engine) => {
+              for (const f of files) {
+                const bytes = await engine.readFile(f);
+                await engine.dropFiles([f]);
+                // A writer that bypassed DuckDB's file system leaves the target empty.
+                if (bytes.byteLength <= 1) throw new Error(`The writer left ${f} empty.`);
+                if (!layout.zip) {
+                  pieces.push(new Blob([bytes as Uint8Array<ArrayBuffer>]));
+                  continue;
+                }
+                zip ??= new Zip((error, chunk) => {
+                  if (error) throw error;
+                  pieces.push(new Blob([chunk as Uint8Array<ArrayBuffer>]));
+                });
+                // The formats are compressed or will be by the user; storing costs no memory.
+                const entry = new ZipPassThrough(f.slice(layout.root.length + 1));
+                zip.add(entry);
+                entry.push(bytes, true);
+              }
+            },
+            { priority: "background", signal },
+          );
         },
-        { signal },
+        signal,
       );
-      save(blob, plan.layout.download);
+      step({ step: "saving" }, 0.99);
+      (zip as Zip | null)?.end();
+      const blob = new Blob(pieces, result.layout.zip ? { type: "application/zip" } : {});
+      save(blob, result.layout.download);
       set({
         state: "done",
-        name: plan.layout.download,
+        name: result.layout.download,
+        parts: result.parts,
         bytes: blob.size,
         rows: Object.values(result.rows).reduce((n, r) => n + r, 0),
         seconds: (performance.now() - started) / 1000,

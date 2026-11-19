@@ -152,8 +152,15 @@ A Download section in the side panel writes the selection (`src/core/export.ts`,
 - A run shows a progress bar, its step, the percentage (`exportFraction`) and the seconds
   it has taken, and can be cancelled between units of work. The panel shows what
   it reads (the chosen columns of the scope's row groups) and keeps (their selected
-  share). A download that keeps more than 20 MB (`EXPORT_SIZE_LIMIT`, measured on 3DBAG)
-  is refused, with its numbers.
+  share).
+- A download is written in parts of about 8 MB of compressed columns (`EXPORT_PART_BYTES`),
+  because DuckDB's wasm heap ends at 4 GiB and writing takes 45 to 85 times what it
+  keeps. The rows are cut in file order and a feature is never split (`partsSql`). Each
+  part is read, written and moved out of the engine before the next, into a zip built
+  outside DuckDB's memory. One part downloads as the file or package itself; several as a
+  zip of complete files or packages named `<name>-part-001`, `-002`, …. A download that
+  keeps more than 250 MB (`EXPORT_SIZE_LIMIT`), about 1 GB of files, is refused, with its
+  numbers: the zip is held by the browser and cannot pass 4 GiB.
 - Sidecars (`materials`, `textures`, `implicit_geometries`) are not written. Neither
   public package (3DBAG, Chuo-ku) has one.
 

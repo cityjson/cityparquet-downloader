@@ -15,7 +15,8 @@ selected feature is written whole: a building brings its parts.
 - `download-estimate` says what the download reads and keeps.
 - `download-run` runs it, shows a progress bar with the step, the percentage and the seconds, saves the file and reports it.
 - `download-cancel` stops a running download; the next one runs normally.
-- `download-too-large` refuses a download that keeps more than 20 MB, with its numbers, and disables the button.
+- `download-parts` writes a download over about 8 MB as several complete files or packages, `<name>-part-001` and so on, in one zip.
+- `download-too-large` refuses a download that keeps more than 250 MB, with its numbers, and disables the button.
 
 ## How to get to it (user POV)
 
@@ -39,7 +40,8 @@ Steps:
 - **Check the file.** `python3 -I .claude/skills/verify-cityparquet-downloader/scripts/check-download.py --file <file> --source <package URL or fixtures/delft> --ring '<ring JSON>' [--where "<SQL>"] --lods 2.2 --attributes a,b,c` exits 0 when the objects are exactly the selection's whole features, the CRS is the package's and the LoDs and attributes are the chosen ones; a `.zip` package is also validated. It reads `.zip` packages, `.city.json`, `.city.jsonl` and `.fcb`. For an OBJ, unzip it and compare its `o` names with the ids that have the chosen LoD in a CityJSON download of the same selection.
 - **Progress.** While it runs, the snapshot holds `progressbar "Download progress"`; `control browser text --testid download-percent` prints `P %, T s`, and P never goes down.
 - **Cancel.** Click `Download` with `control browser click`, wait for `Finding the parts of features` or `Reading row group`, then `control browser click --role button --name "Cancel download"`: `download-result` reads `Download cancelled.` (3DBAG: the reads stop within a row group).
-- **Too large.** On 3DBAG at footprint zoom without an area, `control browser text --testid download-problem` prints `Too large to write in the browser. The … selected features hold about 163.9 MB, and the limit is 20.0 MB. …` (role `alert`), and the snapshot shows `button "Download" [disabled]`.
+- **Parts.** On 3DBAG at footprint zoom on Delft without an area (131,009 features), `download-estimate` ends `written as about 21 parts in one zip.`; the progress reads `Part k of n: reading row group …`, and `download-result` ends `in n parts, in T s.` Unzip it: every part is a complete file, and the ids across the parts are the selection's, each once.
+- **Too large.** A selection that keeps more than 250 MB: `control browser text --testid download-problem` prints `Too large to write in the browser. … and the limit is 250.0 MB. …` (role `alert`), and the snapshot shows `button "Download" [disabled]`.
 - **Proof.** The downloaded file and its checker report, a snapshot and a screenshot before and after. On the fixture all five formats; on 3DBAG at least one small Delft selection.
 
 ## Gotchas
