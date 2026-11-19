@@ -269,10 +269,10 @@ and 1.6 MB after the click), and the next download runs normally.
 
 ### Memory and the size limit
 
-The guard refuses a download that keeps more than 20 MB (`EXPORT_SIZE_LIMIT`): the
-compressed bytes of the chosen columns, in the selected share of the scope's row groups.
-DuckDB's wasm heap cannot grow past 4 GiB. Views of Delft taken as the area, every LoD
-and attribute, one fresh page each:
+A download is written in parts of about 8 MB (`EXPORT_PART_BYTES`) of the chosen columns'
+compressed bytes, because DuckDB's wasm heap cannot grow past 4 GiB and writing at once
+costs what the table shows. Views of Delft taken as the area, every LoD and attribute,
+written at once, one fresh page each:
 
 | Selected (objects) | Kept | Format | File | Time | Read | Largest process, before and peak |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -284,9 +284,14 @@ and attribute, one fresh page each:
 
 The largest process is the renderer, which holds the page and DuckDB's worker. A download
 adds 45 (CityParquet) to 85 (CityJSON) times what it keeps, so at 19.3 MB CityJSON
-reaches 3.0 GiB. The limit keeps the worst format's peak about 1 GiB under 4 GiB.
-Without an area, the four row groups in view at footprint zoom (131,009 buildings) keep
-164 MB and are refused, with the Download button disabled.
+reaches 3.0 GiB.
+
+In parts, memory stays flat. The four row groups in view at footprint zoom on Delft,
+without an area: 131,009 buildings (262,144 objects), 164 MB kept, as CityJSONSeq in 21
+parts made a 622 MB zip in 216 s, and the largest process peaked at 1,932 MiB. Every part
+is a complete file; together they hold each object once. The guard refuses a download
+that keeps more than 250 MB (`EXPORT_SIZE_LIMIT`), about 1 GB of files; nothing larger
+than the 164 MB above has been run.
 
 ## What the writers need from the extension
 

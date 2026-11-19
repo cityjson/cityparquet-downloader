@@ -10,11 +10,15 @@
 //                `file_row_number`; `export_rows`, every row sharing a `feature_id` with a
 //                seed. A feature's rows are contiguous in its table, so one that reaches a
 //                row group's first or last row brings in the row group beside it
-//   3. fetch     the chosen columns of `export_rows`, one row group at a time, into
+//   3. part      `export_parts`: the rows in file order, cut into parts of about
+//                `EXPORT_PART_BYTES`, a feature never split. Then, per part:
+//   4. fetch     the chosen columns of the part's rows, one row group at a time, into
 //                `<schema>.<table>`
-//   4. restore   `cityparquet_init`, then each table's source `city` footer into
+//   5. restore   `cityparquet_init`, then each table's source `city` footer into
 //                `<schema>.__cityparquet`, so the writer keeps the CRS and source metadata
-//   5. write     `cityparquet_write`, or one `COPY … (FORMAT …)` over the union of the tables
+//   6. write     `cityparquet_write`, or one `COPY … (FORMAT …)` over the union of the tables
+//   7. take      the caller moves the part's files out of the engine, and the local schema
+//                is dropped, so memory holds one part at a time
 import {
   analyzeColumns,
   copySql,
@@ -95,13 +99,20 @@ export function checkRequest(
 }
 
 /**
- * The most compressed bytes a download keeps in the browser: the selected share of the
- * chosen columns. DuckDB's wasm heap cannot grow past 4 GiB, and a download takes about
- * 45 to 85 times this in memory on top of the map's: on 3DBAG, 19.3 MB (15,430 buildings,
- * every LoD and attribute) took the tab from 1.4 to 2.4 GiB as CityJSONSeq and to 3.0 GiB
- * as CityJSON. Measured in docs/findings.md.
+ * The compressed bytes of the chosen columns one part of a download holds. DuckDB's wasm
+ * heap cannot grow past 4 GiB, and writing takes about 45 to 85 times this in memory on
+ * top of the map's: on 3DBAG, 19.3 MB written at once took the tab from 1.4 to 3.0 GiB as
+ * CityJSON. A larger download is written as several parts. Measured in docs/findings.md.
  */
-export const EXPORT_SIZE_LIMIT = 20_000_000;
+export const EXPORT_PART_BYTES = 8_000_000;
+
+/**
+ * The most compressed bytes a download keeps. The files come out 2 (CityParquet) to 5
+ * (CityJSON) times this, and the browser holds them as the zip being built, which cannot
+ * pass 4 GiB: this keeps a download to about 1 GB. On 3DBAG, 164 MB (131,009 buildings)
+ * became a 622 MB zip of CityJSONSeq with the tab at 1.9 GiB throughout.
+ */
+export const EXPORT_SIZE_LIMIT = 250_000_000;
 
 export interface ExportEstimate {
   /** Selected rows (before features are completed). */
@@ -111,6 +122,8 @@ export interface ExportEstimate {
   readBytes: number;
   /** The selected share of `readBytes`: roughly what the output holds, compressed. */
   keptBytes: number;
+  /** About how many parts it is written as. */
+  parts: number;
   limit: number;
   tooLarge: boolean;
 }
@@ -144,7 +157,15 @@ export function estimateExport(
     readBytes += read;
     keptBytes += input.drawable === 0 ? 0 : Math.round((read * input.selected) / input.drawable);
   }
-  return { selected, rowGroups, readBytes, keptBytes, limit, tooLarge: keptBytes > limit };
+  return {
+    selected,
+    rowGroups,
+    readBytes,
+    keptBytes,
+    parts: Math.max(1, Math.ceil(keptBytes / EXPORT_PART_BYTES)),
+    limit,
+    tooLarge: keptBytes > limit,
+  };
 }
 
 /** A row the expansion found on a row group's edge. */
@@ -215,21 +236,53 @@ export interface OutputLayout {
   target: string;
   /** The browser download's name. */
   download: string;
-  /** Whether the files written are zipped (a package; an OBJ with its .mtl). */
+  /**
+   * Whether the files written are zipped (a package; an OBJ with its .mtl; several
+   * parts). A zip entry is the file's path under `root`.
+   */
   zip: boolean;
 }
 
-export function outputLayout(format: ExportFormat, fileName: string, run: number): OutputLayout {
+/** Which part of how many a layout is for. */
+export interface Part {
+  index: number;
+  count: number;
+}
+
+/**
+ * Where a download, or one part of it, is written. A download in several parts is a zip
+ * of complete files or packages named `<name>-part-001`, `-002`, ….
+ */
+export function outputLayout(
+  format: ExportFormat,
+  fileName: string,
+  run: number,
+  part: Part = { index: 0, count: 1 },
+): OutputLayout {
   const root = `/export/${run}`;
   const base = fileName.trim().replaceAll("/", "_");
+  const split = part.count > 1;
+  const name = split ? `${base}-part-${String(part.index + 1).padStart(3, "0")}` : base;
   switch (format) {
     case "cityparquet":
-      return { root, target: `${root}/${base}/`, download: `${base}.zip`, zip: true };
+      return {
+        root,
+        target: split ? `${root}/${base}/${name}/` : `${root}/${base}/`,
+        download: `${base}.zip`,
+        zip: true,
+      };
     case "obj":
-      return { root, target: `${root}/${base}.obj`, download: `${base}-obj.zip`, zip: true };
+      return {
+        root,
+        target: `${root}/${base}/${name}.obj`,
+        download: `${base}-obj.zip`,
+        zip: true,
+      };
     default: {
-      const name = `${base}${FORMATS[format].extension}`;
-      return { root, target: `${root}/${name}`, download: name, zip: false };
+      const file = `${name}${FORMATS[format].extension}`;
+      return split
+        ? { root, target: `${root}/${base}/${file}`, download: `${base}.zip`, zip: true }
+        : { root, target: `${root}/${file}`, download: file, zip: false };
     }
   }
 }
@@ -242,6 +295,9 @@ export interface ExportPlan {
   tables: { input: ExportInput; columns: string[]; lods: readonly string[] }[];
   /** The local schema, which `cityparquet_write` also takes as the STAC Item's id. */
   schema: string;
+  /** Numbers the virtual-FS directory, so runs do not share one. */
+  run: number;
+  /** The layout when the download is one part. */
   layout: OutputLayout;
 }
 
@@ -261,12 +317,19 @@ export function planExport(
     .replace(/[^a-z0-9_]+/g, "_")
     .replace(/^_+|_+$/g, "");
   const schema = name === "" || TAKEN.has(name) || /^\d/.test(name) ? "subset" : name;
-  return { request, tables, schema, layout: outputLayout(request.format, request.fileName, run) };
+  return {
+    request,
+    tables,
+    schema,
+    run,
+    layout: outputLayout(request.format, request.fileName, run),
+  };
 }
 
 const SEED = "export_seed";
 const KEYS = "export_keys";
 const ROWS = "export_rows";
+const PARTS = "export_parts";
 
 const local = (plan: ExportPlan, table: string): Sql => sql`${ident(plan.schema)}.${ident(table)}`;
 
@@ -276,8 +339,6 @@ const range = (c: Chunk): Sql =>
 export function setupSql(plan: ExportPlan): Sql[] {
   const names = plan.tables.map((t) => lit(t.input.table.name)).join(", ") as Sql;
   return [
-    sql`DROP SCHEMA IF EXISTS ${ident(plan.schema)} CASCADE`,
-    sql`CREATE SCHEMA ${ident(plan.schema)}`,
     sql`CREATE OR REPLACE TABLE ${ident(SEED)} AS
 SELECT DISTINCT tbl, file, "row" FROM ${ident(SELECTION_TABLE)} WHERE tbl IN (${names})`,
     sql`CREATE OR REPLACE TABLE ${ident(KEYS)} (tbl VARCHAR, file INTEGER, "row" BIGINT, feature_id VARCHAR)`,
@@ -314,19 +375,56 @@ export function edgesSql(read: readonly Chunk[]): Sql {
 JOIN (VALUES ${values as Sql}) e(tbl, file, "row") ON e.tbl = r.tbl AND e.file = r.file AND e."row" = r."row"`;
 }
 
-/** Rows `i, n`: how many wanted rows each row group read holds, by its position in `read`. */
-export function rowsPerChunkSql(read: readonly Chunk[]): Sql {
-  const values = read
+const chunkValues = (read: readonly Chunk[], extra: (c: Chunk, i: number) => string): Sql =>
+  read
     .map(
       (c, i) =>
-        `(${num(i)}, ${lit(c.table)}, ${num(c.fileIndex)}, ${num(c.start)}, ${num(c.start + c.rows)})`,
+        `(${num(i)}, ${lit(c.table)}, ${num(c.fileIndex)}, ${num(c.start)}, ${num(c.start + c.rows)}, ${extra(c, i)})`,
     )
-    .join(", ");
-  return sql`SELECT c.i, count(*)::BIGINT AS n
-FROM (VALUES ${values as Sql}) c(i, tbl, file, lo, hi)
-JOIN ${ident(ROWS)} r ON r.tbl = c.tbl AND r.file = c.file AND r."row" >= c.lo AND r."row" < c.hi
-GROUP BY c.i ORDER BY c.i`;
+    .join(", ") as Sql;
+
+/**
+ * `export_parts (tbl, file, row, part)`: the wanted rows in file order, cut wherever the
+ * running sum of `weight` (a row's bytes in its row group) passes a multiple of
+ * `partBytes`. A feature goes whole to the part its first row falls in. Parts count from 0.
+ */
+export function partsSql(
+  read: readonly Chunk[],
+  weight: (c: Chunk) => number,
+  partBytes = EXPORT_PART_BYTES,
+): Sql {
+  return sql`CREATE OR REPLACE TABLE ${ident(PARTS)} AS
+WITH weighed AS (
+  SELECT r.tbl, r.file, r."row", k.feature_id, c.w
+  FROM ${ident(ROWS)} r
+  JOIN (VALUES ${chunkValues(read, (c) => num(weight(c)))}) c(i, tbl, file, lo, hi, w)
+    ON c.tbl = r.tbl AND c.file = r.file AND r."row" >= c.lo AND r."row" < c.hi
+  LEFT JOIN ${ident(KEYS)} k ON k.tbl = r.tbl AND k.file = r.file AND k."row" = r."row"
+), placed AS (
+  SELECT *, sum(w) OVER (ORDER BY tbl, file, "row") AS pos FROM weighed
+), started AS (
+  SELECT *, min(pos) OVER (
+    PARTITION BY tbl, coalesce(feature_id, file::VARCHAR || ':' || "row"::VARCHAR)) AS first_pos
+  FROM placed
+)
+SELECT tbl, file, "row",
+  (dense_rank() OVER (ORDER BY floor(first_pos / ${num(partBytes)})) - 1)::INTEGER AS part
+FROM started`;
 }
+
+/** Rows `part, i, n`: how many rows of each part each row group read holds, by its position in `read`. */
+export function rowsPerPartSql(read: readonly Chunk[]): Sql {
+  return sql`SELECT p.part, c.i, count(*)::BIGINT AS n
+FROM (VALUES ${chunkValues(read, () => "0")}) c(i, tbl, file, lo, hi, w)
+JOIN ${ident(PARTS)} p ON p.tbl = c.tbl AND p.file = c.file AND p."row" >= c.lo AND p."row" < c.hi
+GROUP BY p.part, c.i ORDER BY p.part, c.i`;
+}
+
+/** A part's local schema, empty. */
+export const schemaSql = (plan: ExportPlan): Sql[] => [
+  sql`DROP SCHEMA IF EXISTS ${ident(plan.schema)} CASCADE`,
+  sql`CREATE SCHEMA ${ident(plan.schema)}`,
+];
 
 /** An empty local table with the columns a download reads, typed as in the file. */
 export const createTableSql = (plan: ExportPlan, t: ExportPlan["tables"][number]): Sql => {
@@ -336,13 +434,19 @@ export const createTableSql = (plan: ExportPlan, t: ExportPlan["tables"][number]
 SELECT ${t.columns.map(ident).join(", ") as Sql} FROM read_parquet(${lit(first)}) LIMIT 0`;
 };
 
-/** The wanted rows of one row group, with the chosen columns, into the local table. */
-export function fetchSql(plan: ExportPlan, t: ExportPlan["tables"][number], c: Chunk): Sql {
+/** A part's rows of one row group, with the chosen columns, into the local table. */
+export function fetchSql(
+  plan: ExportPlan,
+  t: ExportPlan["tables"][number],
+  c: Chunk,
+  part: number,
+): Sql {
   return sql`INSERT INTO ${local(plan, t.input.table.name)} BY NAME
 SELECT ${t.columns.map(ident).join(", ") as Sql}
 FROM read_parquet(${lit(c.file)}, file_row_number := true)
 WHERE ${range(c)} AND file_row_number IN (
-  SELECT "row" FROM ${ident(ROWS)} WHERE tbl = ${lit(c.table)} AND file = ${num(c.fileIndex)})`;
+  SELECT "row" FROM ${ident(PARTS)}
+  WHERE tbl = ${lit(c.table)} AND file = ${num(c.fileIndex)} AND part = ${num(part)})`;
 }
 
 /** Registers the local tables as a package and gives each its source `city` footer back. */
@@ -410,29 +514,32 @@ export const writtenSql = (plan: ExportPlan): Sql =>
 export function cleanupSql(plan: ExportPlan): Sql[] {
   return [
     sql`DROP SCHEMA IF EXISTS ${ident(plan.schema)} CASCADE`,
-    ...[SEED, KEYS, ROWS].map((t) => sql`DROP TABLE IF EXISTS ${ident(t)}`),
+    ...[SEED, KEYS, ROWS, PARTS].map((t) => sql`DROP TABLE IF EXISTS ${ident(t)}`),
   ];
 }
 
 export type ExportProgress =
   | { step: "expanding"; done: number; total: number }
-  | { step: "reading"; done: number; total: number }
-  | { step: "writing" };
+  /** `done` of `total` row groups of part `part` (from 0) of `parts`. */
+  | { step: "reading"; done: number; total: number; part: number; parts: number }
+  | { step: "writing"; part: number; parts: number };
 
 /**
- * How far a run is, from 0 to 1. Finding the parts of features takes the first third,
- * reading the row groups the next half and writing the rest. A step without a count sits
- * at its start. Finding parts can add row groups, so a caller keeps the largest value.
+ * How far a run is, from 0 to 1. Finding the parts of features takes the first quarter;
+ * the parts share the rest, each reading its row groups and then writing. Finding parts
+ * of features can add row groups, so a caller keeps the largest value.
  */
 export function exportFraction(p: ExportProgress): number {
   const share = (done: number, total: number) => (total === 0 ? 0 : Math.min(done / total, 1));
+  const within = (part: number, parts: number, at: number) =>
+    0.25 + (0.75 * (part + at)) / Math.max(parts, 1);
   switch (p.step) {
     case "expanding":
-      return 0.33 * share(p.done, p.total);
+      return 0.25 * share(p.done, p.total);
     case "reading":
-      return 0.33 + 0.5 * share(p.done, p.total);
+      return within(p.part, p.parts, 0.6 * share(p.done, p.total));
     case "writing":
-      return 0.83;
+      return within(p.part, p.parts, 0.6);
   }
 }
 
@@ -445,24 +552,35 @@ export type ExportExec = <T>(
   work: (engine: Engine) => Promise<T>,
 ) => Promise<T>;
 
+/**
+ * Takes the files one part wrote, laid out as `layout`. The app moves them out of the
+ * engine and drops them, so the next part has the memory.
+ */
+export type ExportTake = (files: string[], layout: OutputLayout) => Promise<void>;
+
 export interface ExportResult {
-  /** Virtual-FS paths of the files written, under `plan.layout.root`. */
+  /** Virtual-FS paths of every file written, under `layout.root`. */
   files: string[];
   /** Rows written per table: the selection's features, whole. */
   rows: Record<string, number>;
+  parts: number;
+  /** The first part's layout: its `download` and `zip` hold for the whole download. */
+  layout: OutputLayout;
 }
 
 const abortError = () => new DOMException("The download was cancelled.", "AbortError");
 
 /**
- * Runs the plan up to the written files. Between units of work it stops when `signal`
- * aborts. The local schema and tables stay until `cleanupSql`, which the caller runs
- * either way.
+ * Runs the plan, a part at a time, handing each part's files to `take`. Between units of
+ * work it stops when `signal` aborts. The local tables stay until `cleanupSql`, which the
+ * caller runs either way.
  */
 export async function runExport(
   plan: ExportPlan,
   exec: ExportExec,
+  take: ExportTake = async () => {},
   signal?: AbortSignal,
+  partBytes = EXPORT_PART_BYTES,
 ): Promise<ExportResult> {
   const check = () => {
     if (signal?.aborted) throw abortError();
@@ -501,45 +619,70 @@ export async function runExport(
   }
 
   const chunks = [...read.values()];
-  const counts = await exec({ step: "reading", done: 0, total: chunks.length }, (e) =>
-    e.query(rowsPerChunkSql(chunks)),
-  );
-  const wanted = counts.flatMap((r) => {
-    const c = chunks[Number(r.i)];
-    return c && Number(r.n) > 0 ? [c] : [];
+  // A row's share of the chosen columns' compressed bytes in its row group.
+  const weight = (c: Chunk): number => {
+    const t = plan.tables.find((x) => x.input.table.name === c.table);
+    const group = t?.input.table.rowGroups.find((g) => g.file === c.file && g.index === c.index);
+    return t && group && c.rows > 0 ? bytesOf([group], t.columns) / c.rows : 0;
+  };
+  const counts = await exec({ step: "expanding", done: read.size, total: read.size }, async (e) => {
+    await e.exec(partsSql(chunks, weight, partBytes));
+    return e.query(rowsPerPartSql(chunks));
   });
+  const parts: Chunk[][] = [];
   const rows: Record<string, number> = {};
   for (const t of plan.tables) rows[t.input.table.name] = 0;
   for (const r of counts) {
     const c = chunks[Number(r.i)];
-    if (c) rows[c.table] = (rows[c.table] ?? 0) + Number(r.n);
-  }
-  await exec({ step: "reading", done: 0, total: wanted.length }, async (e) => {
-    for (const t of plan.tables) await e.exec(createTableSql(plan, t));
-  });
-  for (const [i, c] of wanted.entries()) {
-    check();
-    const t = plan.tables.find((x) => x.input.table.name === c.table);
-    if (!t) continue;
-    await exec({ step: "reading", done: i, total: wanted.length }, (e) =>
-      e.exec(fetchSql(plan, t, c)),
-    );
+    if (!c) continue;
+    (parts[Number(r.part)] ??= []).push(c);
+    rows[c.table] = (rows[c.table] ?? 0) + Number(r.n);
   }
 
-  check();
-  const files = await exec({ step: "writing" }, async (e) => {
-    for (const s of restoreSql(plan)) await e.exec(s);
-    let corner: Corner | null = null;
-    if (plan.request.format !== "cityparquet" && plan.request.format !== "obj") {
-      const [c] = await e.query(cornerSql(plan));
-      if (c && [c.x, c.y, c.z].every((v) => typeof v === "number")) {
-        corner = { x: Number(c.x), y: Number(c.y), z: Number(c.z) };
-      }
+  const count = parts.length;
+  const layoutOf = (index: number) =>
+    outputLayout(plan.request.format, plan.request.fileName, plan.run, { index, count });
+  const files: string[] = [];
+  for (const [part, wanted] of parts.entries()) {
+    check();
+    // The tables with rows in this part; the writers are given no empty table.
+    const tables = plan.tables.filter((t) => wanted.some((c) => c.table === t.input.table.name));
+    const partPlan: ExportPlan = { ...plan, tables, layout: layoutOf(part) };
+    await exec(
+      { step: "reading", done: 0, total: wanted.length, part, parts: count },
+      async (e) => {
+        for (const s of schemaSql(partPlan)) await e.exec(s);
+        for (const t of tables) await e.exec(createTableSql(partPlan, t));
+      },
+    );
+    for (const [i, c] of wanted.entries()) {
+      check();
+      const t = tables.find((x) => x.input.table.name === c.table);
+      if (!t) continue;
+      await exec({ step: "reading", done: i, total: wanted.length, part, parts: count }, (e) =>
+        e.exec(fetchSql(partPlan, t, c, part)),
+      );
     }
-    await e.exec(writeSql(plan, corner));
-    return (await e.query(writtenSql(plan))).map((r) => String(r.file));
-  });
-  return { files, rows };
+    check();
+    const written = await exec({ step: "writing", part, parts: count }, async (e) => {
+      for (const s of restoreSql(partPlan)) await e.exec(s);
+      let corner: Corner | null = null;
+      if (plan.request.format !== "cityparquet" && plan.request.format !== "obj") {
+        const [c] = await e.query(cornerSql(partPlan));
+        if (c && [c.x, c.y, c.z].every((v) => typeof v === "number")) {
+          corner = { x: Number(c.x), y: Number(c.y), z: Number(c.z) };
+        }
+      }
+      await e.exec(writeSql(partPlan, corner));
+      const all = (await e.query(writtenSql(partPlan))).map((r) => String(r.file));
+      // Free the part's rows before its files are taken out.
+      await e.exec(schemaSql(partPlan)[0] as Sql);
+      return all.filter((f) => !files.includes(f));
+    });
+    files.push(...written);
+    await take(written, partPlan.layout);
+  }
+  return { files, rows, parts: count, layout: layoutOf(0) };
 }
 
 /** All of an input's table's row groups, in file order, for finding neighbours. */

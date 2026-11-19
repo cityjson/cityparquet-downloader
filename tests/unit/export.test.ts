@@ -160,6 +160,7 @@ describe("estimateExport", () => {
     // Half the drawable rows are selected, so half of what is read is kept.
     expect(e.keptBytes).toBe(750);
     expect(e.tooLarge).toBe(false);
+    expect(e.parts).toBe(1);
     const big = estimateExport(
       [{ table, scope: chunksOf(table), selected: 100, drawable: 100 }],
       request(),
@@ -168,6 +169,19 @@ describe("estimateExport", () => {
     expect(big.tooLarge).toBe(true);
     expect(EXPORT_SIZE_LIMIT).toBeGreaterThan(0);
   });
+});
+
+test("a download in several parts is a zip of numbered files or packages", () => {
+  const part = { index: 1, count: 3 };
+  expect(outputLayout("cityjson", "delft", 1, part)).toMatchObject({
+    target: "/export/1/delft/delft-part-002.city.json",
+    download: "delft.zip",
+    zip: true,
+  });
+  expect(outputLayout("cityparquet", "delft", 1, part).target).toBe(
+    "/export/1/delft/delft-part-002/",
+  );
+  expect(outputLayout("obj", "delft", 1, part).target).toBe("/export/1/delft/delft-part-002.obj");
 });
 
 describe("transformOptions", () => {
@@ -197,7 +211,7 @@ describe("outputLayout", () => {
       zip: true,
     });
     expect(outputLayout("obj", "delft", 1)).toMatchObject({
-      target: "/export/1/delft.obj",
+      target: "/export/1/delft/delft.obj",
       download: "delft-obj.zip",
       zip: true,
     });
@@ -246,13 +260,15 @@ describe("writeSql", () => {
   });
 });
 
-test("exportFraction rises through the steps and ends below 1", () => {
+test("exportFraction rises through the steps and the parts, and ends below 1", () => {
   const steps = [
     exportFraction({ step: "expanding", done: 0, total: 4 }),
     exportFraction({ step: "expanding", done: 4, total: 4 }),
-    exportFraction({ step: "reading", done: 0, total: 0 }),
-    exportFraction({ step: "reading", done: 1, total: 2 }),
-    exportFraction({ step: "writing" }),
+    exportFraction({ step: "reading", done: 0, total: 0, part: 0, parts: 2 }),
+    exportFraction({ step: "reading", done: 1, total: 2, part: 0, parts: 2 }),
+    exportFraction({ step: "writing", part: 0, parts: 2 }),
+    exportFraction({ step: "reading", done: 0, total: 2, part: 1, parts: 2 }),
+    exportFraction({ step: "writing", part: 1, parts: 2 }),
   ];
   expect(steps[0]).toBe(0);
   expect(steps).toEqual([...steps].sort((a, b) => a - b));
