@@ -37,7 +37,7 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 function usePageRows(selection: Ready, shown: readonly string[], view: TableView): PageRows {
   const [rows, setRows] = useState<PageRows>({ state: "loading", rows: [] });
   const key = shown.join("\u0000");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` stands for `shown`.
+  // `key` stands for `shown`.
   useEffect(() => {
     const abort = new AbortController();
     setRows((r) => ({ state: "loading", rows: r.rows }));

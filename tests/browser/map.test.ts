@@ -1,6 +1,6 @@
 // What the map stands on, run on real duckdb-wasm: chunks of footprints read into the local
 // table in Web Mercator, vector tiles cut from it, and one feature's attributes fetched back.
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 import {
   attributesSql,
   type Chunk,
@@ -72,7 +72,9 @@ describe("the Delft fixture's footprints", () => {
     expect(counts).toHaveLength(9);
     // fixtures/README.md: 373 Building rows, which carry LoD 0, and 375 BuildingPart, which do not.
     expect(counts.reduce((a, b) => a + b, 0)).toBe(373);
-    const [row] = await (await getEngine()).query(
+    const [row] = await (
+      await getEngine()
+    ).query(
       `SELECT count(DISTINCT uid) AS uids, min(xmin) AS x, max(ymax) AS y,
               count(*) FILTER (object_type <> 'Building') AS others
        FROM ${FEATURES_TABLE} WHERE chunk >= 100 AND chunk < 109`,
@@ -87,7 +89,9 @@ describe("the Delft fixture's footprints", () => {
 
   test("a chunk's read is its own row group: its rows are numbered within that range", async () => {
     const chunks = chunksOf(building);
-    const rows = await (await getEngine()).query(
+    const rows = await (
+      await getEngine()
+    ).query(
       `SELECT chunk, min("row") AS lo, max("row") AS hi FROM ${FEATURES_TABLE}
        WHERE chunk >= 100 AND chunk < 109 GROUP BY ALL ORDER BY chunk`,
     );

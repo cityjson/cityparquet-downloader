@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import type { RowGroup } from "@/core/footer";
 import { planBox } from "@/core/plan";
 import { parseUrl } from "@/core/url";

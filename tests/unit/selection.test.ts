@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import type { Chunk, ChunkKey } from "@/core/chunk";
 import { parseFilter } from "@/core/filter";
 import type { RowGroup } from "@/core/footer";
