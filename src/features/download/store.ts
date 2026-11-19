@@ -46,7 +46,7 @@ export type DownloadRun =
   | { state: "idle" }
   /** `fraction`: how far it is, 0 to 1, never going back; `started`: `performance.now()` then. */
   | { state: "running"; progress: DownloadProgress; fraction: number; started: number }
-  | { state: "done"; name: string; bytes: number; rows: number; parts: number; seconds: number }
+  | { state: "done"; name: string; bytes: number; rows: number; seconds: number }
   | { state: "cancelled" }
   | { state: "failed"; message: string };
 
@@ -185,53 +185,67 @@ export async function startDownload(): Promise<void> {
       useMapData.getState().cache,
     );
     if (prepared.problem) throw new Error(prepared.problem);
-    const plan = planExport(prepared.inputs, prepared.request, ++runs);
+    // Earlier downloads' files on disk go first; this one's are written beside them.
+    const base = await withEngine(async (engine) => {
+      await engine.clearScratch();
+      return `${engine.scratch}/export`;
+    });
+    const plan = planExport(prepared.inputs, prepared.request, ++runs, base);
     const exec = <T>(progress: ExportProgress, work: Parameters<typeof withEngine<T>>[0]) => {
       if (!signal.aborted) step(progress, exportFraction(progress));
       return withEngine(work, { priority: "background", signal });
     };
+    let kept: string[] = [];
     try {
-      // The download as it is built, outside DuckDB's memory: the one file, or the zip.
-      const pieces: Blob[] = [];
-      let zip: Zip | null = null;
-      const result = await runExport(
-        plan,
-        exec,
-        async (files, layout) => {
-          await withEngine(
-            async (engine) => {
-              for (const f of files) {
-                const bytes = await engine.readFile(f);
-                await engine.dropFiles([f]);
-                // A writer that bypassed DuckDB's file system leaves the target empty.
-                if (bytes.byteLength <= 1) throw new Error(`The writer left ${f} empty.`);
-                if (!layout.zip) {
-                  pieces.push(new Blob([bytes as Uint8Array<ArrayBuffer>]));
-                  continue;
-                }
-                zip ??= new Zip((error, chunk) => {
-                  if (error) throw error;
-                  pieces.push(new Blob([chunk as Uint8Array<ArrayBuffer>]));
-                });
-                // The formats are compressed or will be by the user; storing costs no memory.
-                const entry = new ZipPassThrough(f.slice(layout.root.length + 1));
-                zip.add(entry);
-                entry.push(bytes, true);
-              }
-            },
-            { priority: "background", signal },
-          );
+      const result = await runExport(plan, exec, signal);
+      const { files } = result;
+      step({ step: "saving" }, 0.97);
+      const blob = await withEngine(
+        async (engine) => {
+          await engine.dropFiles(result.staged);
+          // On disk a file is handed over as it lies; in memory it is copied out and freed.
+          const take = async (f: string) => {
+            const blob = await engine.openFile(f);
+            if (!f.startsWith("opfs://")) await engine.dropFiles([f]);
+            // A writer that bypassed DuckDB's file system leaves the target empty.
+            if (blob.size <= 1) throw new Error(`The writer left ${f} empty.`);
+            return blob;
+          };
+          if (!plan.layout.zip) {
+            const [only] = files;
+            if (!only || files.length !== 1)
+              throw new Error(`Expected one file, got ${files.length}.`);
+            return take(only);
+          }
+          const pieces: Blob[] = [];
+          const zip = new Zip((error, chunk) => {
+            if (error) throw error;
+            pieces.push(new Blob([chunk as Uint8Array<ArrayBuffer>]));
+          });
+          const folder = plan.layout.download.replace(/(-obj)?\.zip$/, "");
+          for (const f of files) {
+            // Parquet is compressed already; the entries are only stored, a chunk at a time.
+            const entry = new ZipPassThrough(`${folder}/${f.split("/").at(-1)}`);
+            zip.add(entry);
+            const reader = (await take(f)).stream().getReader();
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              entry.push(value);
+            }
+            entry.push(new Uint8Array(0), true);
+          }
+          zip.end();
+          return new Blob(pieces, { type: "application/zip" });
         },
-        signal,
+        { signal },
       );
-      step({ step: "saving" }, 0.99);
-      (zip as Zip | null)?.end();
-      const blob = new Blob(pieces, result.layout.zip ? { type: "application/zip" } : {});
-      save(blob, result.layout.download);
+      // On disk the browser saves the file itself, so it stays until the next download.
+      kept = files.filter((f) => f.startsWith("opfs://"));
+      save(blob, plan.layout.download);
       set({
         state: "done",
-        name: result.layout.download,
-        parts: result.parts,
+        name: plan.layout.download,
         bytes: blob.size,
         rows: Object.values(result.rows).reduce((n, r) => n + r, 0),
         seconds: (performance.now() - started) / 1000,
@@ -241,7 +255,7 @@ export async function startDownload(): Promise<void> {
       await withEngine(async (engine) => {
         for (const s of cleanupSql(plan)) await engine.exec(s);
         const written = await engine.query(writtenSql(plan));
-        await engine.dropFiles(written.map((r) => String(r.file)));
+        await engine.dropFiles(written.map((r) => String(r.file)).filter((f) => !kept.includes(f)));
       }).catch(() => undefined);
     }
   } catch (e) {

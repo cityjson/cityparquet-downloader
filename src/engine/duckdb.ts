@@ -8,8 +8,18 @@ export interface BrowserEngine extends Engine {
   queryBytes(sql: string): Promise<Uint8Array | null>;
   /** Reads a file DuckDB wrote to its virtual file system (a `COPY … TO` target). */
   readFile(path: string): Promise<Uint8Array>;
+  /**
+   * Where large files are written: a directory in the browser's origin private file
+   * system (`opfs://…`), on disk and outside DuckDB's memory; or `/scratch`, in memory,
+   * where the browser has none.
+   */
+  scratch: string;
+  /** A file DuckDB wrote, as a Blob: for one under `opfs://` the file on disk, not a copy in memory. */
+  openFile(path: string): Promise<Blob>;
   /** Frees virtual-FS files once they are no longer needed. */
   dropFiles(paths: string[]): Promise<void>;
+  /** Removes everything under `scratch` that is on disk. */
+  clearScratch(): Promise<void>;
   /** Tears the worker down. Create a new engine afterwards. */
   terminate(): Promise<void>;
 }
@@ -47,6 +57,30 @@ function toRows(table: { toArray(): { toJSON(): unknown }[] }): Row[] {
     );
 }
 
+const OPFS = "opfs://";
+/** The app's directory in the origin private file system. */
+const SCRATCH = `${OPFS}cityparquet-downloader`;
+
+/** The directory duckdb-wasm keeps `opfs://<path>` files in, or null without the file system. */
+async function opfsRoot(): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const duckdb = await root.getDirectoryHandle("duckdb", { create: true });
+    return await duckdb.getDirectoryHandle("fs", { create: true });
+  } catch {
+    return null;
+  }
+}
+
+/** The directory holding `path` (an `opfs://` one) and its name in it. */
+async function locate(root: FileSystemDirectoryHandle, path: string) {
+  const parts = path.slice(OPFS.length).split("/").filter(Boolean);
+  const name = parts.pop() ?? "";
+  let dir = root;
+  for (const p of parts) dir = await dir.getDirectoryHandle(p);
+  return { dir, name };
+}
+
 export async function createEngine(): Promise<BrowserEngine> {
   // The single-threaded bundle: it needs no cross-origin isolation, so the app can be
   // served from any static host.
@@ -63,8 +97,19 @@ export async function createEngine(): Promise<BrowserEngine> {
         reliableHeadRequests: true,
         allowFullHTTPReads: false,
       },
+      // `opfs://` files named in SQL are opened for the query and closed after it.
+      opfs: { fileHandling: "auto" },
     });
     const conn = await db.connect();
+    const disk = await opfsRoot();
+    const clearScratch = async () => {
+      if (!disk) return;
+      await disk
+        .removeEntry(SCRATCH.slice(OPFS.length), { recursive: true })
+        .catch(() => undefined);
+    };
+    // Files a page left behind when it was closed or reloaded.
+    await clearScratch();
     for (const name of CORE_EXTENSIONS) {
       await conn.query(`INSTALL ${name}`);
       await conn.query(`LOAD ${name}`);
@@ -87,9 +132,23 @@ export async function createEngine(): Promise<BrowserEngine> {
       async readFile(path) {
         return db.copyFileToBuffer(path);
       },
-      async dropFiles(paths) {
-        for (const path of paths) await db.dropFile(path).catch(() => undefined);
+      scratch: disk ? SCRATCH : "/scratch",
+      async openFile(path) {
+        if (!disk || !path.startsWith(OPFS)) {
+          return new Blob([(await db.copyFileToBuffer(path)) as Uint8Array<ArrayBuffer>]);
+        }
+        const { dir, name } = await locate(disk, path);
+        return (await dir.getFileHandle(name)).getFile();
       },
+      async dropFiles(paths) {
+        for (const path of paths) {
+          if (disk && path.startsWith(OPFS)) {
+            const at = await locate(disk, path).catch(() => null);
+            await at?.dir.removeEntry(at.name).catch(() => undefined);
+          } else await db.dropFile(path).catch(() => undefined);
+        }
+      },
+      clearScratch,
       async terminate() {
         await conn.close().catch(() => undefined);
         await db.terminate();
