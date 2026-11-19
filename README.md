@@ -12,8 +12,8 @@ every format.
 
 ## Stack
 
-- TypeScript and React, built with Vite; Tailwind 4 with shadcn/ui, Zustand. Node 26,
-  pnpm, Biome.
+- TypeScript and React on [Vite+](https://viteplus.dev/) (`vp`: dev server, build, tests,
+  lint and format); Tailwind 4 with shadcn/ui, Zustand. Node 26, pnpm.
 - `@duckdb/duckdb-wasm` embedding DuckDB 2.0, single-threaded bundle, so the app can be
   served from any static host.
 - The [`cityjson`](https://github.com/cityjson/duckdb-cityjson) and

@@ -99,7 +99,7 @@ export function TableDrawer() {
       className="relative flex shrink-0 flex-col border-t bg-background"
       style={{ height }}
     >
-      {/* biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA pattern for a resize handle; <hr> cannot take focus. */}
+      {/* A focusable separator is the ARIA pattern for a resize handle; <hr> cannot take focus. */}
       <div
         role="separator"
         aria-orientation="horizontal"

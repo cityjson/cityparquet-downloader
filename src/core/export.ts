@@ -471,9 +471,11 @@ export async function runExport(
       { step: "expanding", done: read.size, total: read.size },
       async (e) => {
         await e.exec(expandSql);
-        return (await e.query(edgesSql([...read.values()]))).map(
-          (r): EdgeRow => ({ tbl: String(r.tbl), file: Number(r.file), row: Number(r.row) }),
-        );
+        return (await e.query(edgesSql([...read.values()]))).map((r): EdgeRow => ({
+          tbl: String(r.tbl),
+          file: Number(r.file),
+          row: Number(r.row),
+        }));
       },
     );
     pending = [...all.values()].flatMap((chunks) =>

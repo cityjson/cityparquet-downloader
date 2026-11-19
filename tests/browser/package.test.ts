@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 import {
   type Box,
   fileList,
@@ -70,7 +70,9 @@ describe("the Delft fixture", () => {
     const starts = building.rowGroups.map((_, i) =>
       building.rowGroups.slice(0, i).reduce((n, g) => n + g.rows, 0),
     );
-    const rows = await (await getEngine()).query(
+    const rows = await (
+      await getEngine()
+    ).query(
       sql`SELECT file_row_number AS n FROM read_parquet(${fileList(building.files)},
           file_row_number := true)
           WHERE bbox.xmin <= 84420 AND bbox.xmax >= 84400 AND bbox.ymin <= 447210

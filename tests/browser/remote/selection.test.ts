@@ -3,7 +3,7 @@
 // the count. Opt-in: CITYPARQUET_REMOTE=1. Nothing here is pinned to a row count, since
 // the data is published by others: the area's answer is checked against the same test
 // run in the package CRS on the geometry read again, with the area's edges densified.
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import {
   chunksOf,
   compileSelection,

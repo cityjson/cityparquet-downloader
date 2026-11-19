@@ -67,7 +67,8 @@ if (source) env.VITE_CITYPARQUET_URL = source;
 const vite = spawn(
   process.execPath,
   [
-    path.join(repo, "node_modules/vite/bin/vite.js"),
+    path.join(repo, "node_modules/vite-plus/bin/vp"),
+    "dev",
     "--host",
     "127.0.0.1",
     "--port",
@@ -153,7 +154,7 @@ try {
       .then(() => "error"),
   ]).catch(() => "timeout");
   const at = ms();
-  // biome-ignore lint/performance/useDomNodeTextContent: the rendered text is what a user reads
+  // The rendered text is what a user reads
   const text = await page.locator("main").innerText();
   const get = requests.filter((r) => r.method === "GET");
   console.log(

@@ -1,6 +1,6 @@
 // The selection's SQL on real duckdb-wasm, against answers native DuckDB computed with SQL
 // written by hand (scripts/expect-selection.py writes selection.expected.json).
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 import {
   attributeColumns,
   chunksOf,

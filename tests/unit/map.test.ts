@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { type CacheEntry, planCache } from "@/core/cache";
 import { type Chunk, chunksOf, regimeFor, touchedChunks } from "@/core/chunk";
 import { colourOf, OBJECT_TYPE_COLOURS } from "@/core/colour";

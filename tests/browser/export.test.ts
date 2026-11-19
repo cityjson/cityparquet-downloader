@@ -1,7 +1,7 @@
 // Downloads on real duckdb-wasm: each format written from a selection of the fixtures and
 // read back with the extension's own readers, against ids native DuckDB computed with SQL
 // written by hand (scripts/expect-export.py writes export.expected.json).
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 import {
   type Chunk,
   chunksOf,

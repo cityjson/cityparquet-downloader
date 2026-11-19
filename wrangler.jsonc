@@ -8,6 +8,6 @@
   "assets": {
     "directory": "./dist",
     // One page with no routes: any other path serves index.html.
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+  },
 }

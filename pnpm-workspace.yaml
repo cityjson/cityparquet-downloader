@@ -1,0 +1,8 @@
+# Vite+ ships its own Vite: every `vite` in the tree resolves to it.
+overrides:
+  vite@*: npm:@voidzero-dev/vite-plus-core@8.3.8000
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

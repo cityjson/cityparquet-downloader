@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { type Fetch, parseSource, resolveSource, SourceError } from "@/core/source";
 
 const BASE = "http://localhost:5173/";
