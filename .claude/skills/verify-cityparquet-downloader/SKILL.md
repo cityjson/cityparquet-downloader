@@ -92,7 +92,7 @@ page, and disconnects. The page keeps its state between calls.
 | `control browser wheel --x … --y … --dy -300` | Scrolls there: negative zooms the map in |
 | `control browser map-view` | Prints the map's zoom, centre and bounds |
 | `control browser map-at --lon 4.357 --lat 52.011` | Prints the page pixel of a point, for `click`, `hover` and `wheel` |
-| `control browser map-feature --id <id>` | Prints a page pixel inside that feature's drawn footprint |
+| `control browser map-feature --id <id>` | Prints a page pixel inside that feature's drawn footprint, or `null` when another footprint or a bbox rectangle lies over its centre (every Chuo-ku building is under the `Bridge` box) |
 | `control browser drag --x … --y … --to-x … --to-y … [--steps 10]` | Presses, moves and releases the mouse, such as a rectangle on the map |
 | `control browser select --role combobox --name "…" --value …` | Chooses an option of a select by its value |
 | `control browser fill --role textbox --name "…" --value "…"` | Types into a field |

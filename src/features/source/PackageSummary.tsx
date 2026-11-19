@@ -50,29 +50,29 @@ export function PackageSummary() {
             <Table aria-label="Tables" className="text-xs">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="h-7 px-1">Table</TableHead>
-                  <TableHead className="h-7 px-1 text-right">Rows</TableHead>
-                  <TableHead className="h-auto px-1 py-1 text-right whitespace-normal">
+                  <TableHead className="h-7 px-0.5">Table</TableHead>
+                  <TableHead className="h-7 px-0.5 text-right">Rows</TableHead>
+                  <TableHead className="h-auto px-0.5 py-1 text-right whitespace-normal">
                     Row groups
                   </TableHead>
-                  <TableHead className="h-7 px-1">LoDs</TableHead>
-                  <TableHead className="h-7 px-1 text-right">Attributes</TableHead>
+                  <TableHead className="h-7 px-0.5">LoDs</TableHead>
+                  <TableHead className="h-7 px-0.5 text-right">Attributes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {info.tables.map((t) => (
                   <TableRow key={t.name}>
-                    <TableCell className="px-1 font-medium text-foreground">{t.name}</TableCell>
-                    <TableCell className="px-1 text-right tabular-nums">
+                    <TableCell className="px-0.5 font-medium text-foreground">{t.name}</TableCell>
+                    <TableCell className="px-0.5 text-right tabular-nums">
                       {formatCount(t.rowCount)}
                     </TableCell>
-                    <TableCell className="px-1 text-right tabular-nums">
+                    <TableCell className="px-0.5 text-right tabular-nums">
                       {formatCount(t.rowGroups.length)}
                     </TableCell>
-                    <TableCell className="px-1 whitespace-normal">
+                    <TableCell className="px-0.5 whitespace-normal">
                       {t.lods.join(", ") || "none"}
                     </TableCell>
-                    <TableCell className="px-1 text-right tabular-nums">
+                    <TableCell className="px-0.5 text-right tabular-nums">
                       {t.attributes.length}
                     </TableCell>
                   </TableRow>
