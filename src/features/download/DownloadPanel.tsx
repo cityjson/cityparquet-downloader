@@ -256,7 +256,7 @@ export function DownloadPanel() {
 
       {request.tables.length > 0 && (
         <p className="text-xs tabular-nums" data-testid="download-estimate">
-          Reads about {formatBytes(estimate.readBytes)} from {formatCount(estimate.rowGroups)} row{" "}
+          Reads at most {formatBytes(estimate.readBytes)} from {formatCount(estimate.rowGroups)} row{" "}
           {estimate.rowGroups === 1 ? "group" : "groups"}; keeps about{" "}
           {formatBytes(estimate.keptBytes)}.
         </p>

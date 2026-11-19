@@ -12,7 +12,6 @@ import {
   type ExportProgress,
   type ExportRequest,
   estimateExport,
-  formatLabel,
   type PackageTable,
   planExport,
   runExport,
@@ -141,12 +140,12 @@ export function prepare(
       : chosen.length === 0
         ? `No selected table has LoD ${objLod}, which the OBJ would hold.`
         : estimate.tooLarge
-          ? `Too large for the browser: about ${mb(estimate.keptBytes)} of ${formatLabel(draft.format)} input for ${estimate.selected} selected features, over the ${mb(estimate.limit)} limit. Select fewer features, LoDs or attributes.`
+          ? `Too large for the browser: it keeps about ${mb(estimate.keptBytes)} of the package for ${estimate.selected.toLocaleString("en-GB")} selected features, and the limit is ${mb(estimate.limit)}. Select fewer features, LoDs or attributes.`
           : checkRequest(tables, request);
   return { request, inputs, estimate, problem, skipped };
 }
 
-const mb = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 
 let running: AbortController | null = null;
 let runs = 0;
