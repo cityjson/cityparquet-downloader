@@ -77,6 +77,7 @@ async function download(
   info: PackageInfo,
   scopes: Record<string, Chunk[]>,
   request: ExportRequest,
+  partBytes?: number,
 ): Promise<ExportResult & { root: string; target: string }> {
   const inputs = info.tables
     .filter((t) => scopes[t.name])
@@ -84,7 +85,8 @@ async function download(
   const plan = planExport(inputs, request, run++);
   const engine = await getEngine();
   try {
-    return { ...(await runExport(plan, direct)), ...plan.layout };
+    const result = await runExport(plan, direct, undefined, undefined, partBytes);
+    return { ...result, ...result.layout };
   } finally {
     for (const s of cleanupSql(plan)) await engine.exec(s);
   }
@@ -173,6 +175,42 @@ describe("downloads of the Delft fixture", () => {
       // Every chosen attribute comes back, timestamps included, and no other.
       expect(attributes.sort()).toEqual([...t.attributes].sort());
       expect(await sampleOf(relation, t, columns)).toEqual(t.sample.values);
+      await engine.dropFiles(out.files);
+    },
+  );
+
+  test.each(["cityjsonseq", "cityparquet"] as const)(
+    "%s in parts: every part is complete, no feature is split and none is lost",
+    async (format) => {
+      // Well under the selection's bytes per part.
+      const table = info.tables.find((x) => x.name === "building") as PackageTable;
+      const bytes = scope.reduce((n, c) => {
+        const g = table.rowGroups.find((r) => r.file === c.file && r.index === c.index);
+        return n + ((g?.bytes ?? 0) * t.ids.length) / (g?.rows ?? 1);
+      }, 0);
+      const out = await download(info, { building: scope }, request(format), bytes / 10);
+      expect(out.parts).toBeGreaterThan(1);
+      expect(out.rows).toEqual({ building: t.ids.length });
+      expect(out.layout.zip).toBe(true);
+      const engine = await getEngine();
+      const targets = Array.from({ length: out.parts }, (_, i) =>
+        out.target.replace("-part-001", `-part-${String(i + 1).padStart(3, "0")}`),
+      );
+      const read = (target: string) =>
+        format === "cityparquet"
+          ? `read_parquet('${target}building.parquet')`
+          : `read_cityjsonseq('${target}')`;
+      const all = targets.map((x, i) => `SELECT ${i} AS part, id, feature_id FROM ${read(x)}`);
+      const rows = await engine.query(
+        `SELECT id, part, feature_id FROM (${all.join(" UNION ALL ")}) ORDER BY id`,
+      );
+      expect(rows.map((r) => r.id)).toEqual(t.ids);
+      const partsOf = new Map<string, Set<number>>();
+      for (const r of rows) {
+        const key = String(r.feature_id);
+        partsOf.set(key, (partsOf.get(key) ?? new Set()).add(Number(r.part)));
+      }
+      expect([...partsOf.values()].every((p) => p.size === 1)).toBe(true);
       await engine.dropFiles(out.files);
     },
   );
