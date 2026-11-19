@@ -5,7 +5,10 @@ A web application for downloading any area of a
 entirely in the browser: DuckDB (through duckdb-wasm) reads the package in place over HTTP
 and writes the selected part, so no server is needed.
 
-It is not tied to one dataset. Any CityParquet package can be the source.
+It is not tied to one dataset. Any CityParquet package can be the source. A selection,
+drawn on the map, filtered by attributes or both, downloads as a CityParquet package,
+CityJSON, CityJSONSeq, FlatCityBuf or OBJ, with the levels of detail and attributes
+chosen, each feature whole. The `cityjson` extension writes every format.
 
 ## Stack
 
@@ -53,9 +56,11 @@ They fetch the DuckDB extensions from their hosts; the data comes from `fixtures
 ## Layout
 
 ```
-src/core/       pure TypeScript: package source, footers, CRS, row-group plans
+src/core/       pure TypeScript: package source, footers, CRS, row-group plans, selection,
+                export
 src/engine/     duckdb-wasm: boots it, loads the extensions; the only DuckDB code
-src/features/   the application, one folder per feature
+src/features/   the application, one folder per feature: source, map, selection, table,
+                download
 tests/unit/     src/core
 tests/browser/  real duckdb-wasm against fixtures/; remote/ is opt-in
 fixtures/       small CityParquet packages, cut by scripts/make-fixture.py

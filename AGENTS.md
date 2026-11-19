@@ -35,11 +35,12 @@ test-browser && just build` before calling work done.
 
 ```
 src/core/       pure TypeScript: source, footer, crs, plan, package; chunk, cache, tile,
-                features (map SQL), colour; filter, selection. Unit tested
+                features (map SQL), colour; filter, selection; export. Unit tested
 src/engine/     duckdb-wasm: boot, extensions, file I/O; session.ts is the app's one engine
                 and its priority queue (`withEngine`)
 src/features/   React features: source (opening a package), map (map, footprints, legend,
-                popup), selection (area, store, summary), table (drawer, grid, filter bar)
+                popup), selection (area, store, summary), table (drawer, grid, filter bar),
+                download (panel, store: format, LoDs, attributes, run, size guard)
 src/components/ shadcn/ui
 tests/unit      src/core          tests/browser   SQL against real duckdb-wasm
 fixtures/       small packages cut by scripts/make-fixture.py; never edit by hand

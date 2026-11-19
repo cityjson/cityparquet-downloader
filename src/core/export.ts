@@ -97,7 +97,7 @@ export function checkRequest(
 /**
  * The most compressed bytes a download keeps in the browser: the selected share of the
  * chosen columns. DuckDB's wasm heap cannot grow past 4 GiB, and a download takes about
- * 50 to 75 times this in memory on top of the map's: on 3DBAG, 19.3 MB (15,430 buildings,
+ * 45 to 85 times this in memory on top of the map's: on 3DBAG, 19.3 MB (15,430 buildings,
  * every LoD and attribute) took the tab from 1.4 to 2.4 GiB as CityJSONSeq and to 3.0 GiB
  * as CityJSON. Measured in docs/findings.md.
  */
